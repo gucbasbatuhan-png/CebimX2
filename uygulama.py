@@ -595,7 +595,49 @@ with sekme_danisman:
             st.warning(f"🎮 **İstek vs İhtiyaç:** Bu ara 'Keyfi' harcamalara biraz fazla dalmışsın kanka ({keyfi_toplam:,.2f} TL).")
 
 # --- SEKME 12: BORÇLAR ---
+# --- SEKME 12: BORÇLAR ---
 with sekme_borclar:
+    st.subheader("💳 Kredi Kartı Borç Yönetimi")
+    if df_kartlar.empty:
+        st.info("Sisteme kayıtlı kredi kartı bulunmuyor. Önce 'Kartlar' sekmesinden kart ekle.")
+    else:
+        kk_borc_kol1, kk_borc_kol2 = st.columns(2)
+        with kk_borc_kol1:
+            st.write("### ➕ Kart Borcu Ekle / Öde")
+            with st.form("kk_borc_formu"):
+                kart_isimleri = df_kartlar['kart_adi'].tolist()
+                secilen_kart_adi = st.selectbox("İşlem Yapılacak Kart", kart_isimleri)
+                islem_tipi = st.radio("İşlem Tipi", ["Borç Ekle (Geçmiş Harcama)", "Borç Öde (Ekstre Ödemesi)"], horizontal=True)
+                islem_tutari = st.number_input("Tutar (TL)", min_value=0.0, step=100.0)
+                
+                if st.form_submit_button("Kartı Güncelle"):
+                    if islem_tutari > 0:
+                        row_idx = int(df_kartlar[df_kartlar['kart_adi'] == secilen_kart_adi].index[0] + 2)
+                        mevcut_borc = float(df_kartlar.loc[row_idx-2, 'guncel_borc'])
+                        
+                        if "Ekle" in islem_tipi:
+                            yeni_borc = mevcut_borc + islem_tutari
+                            mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL borç eklendi!"
+                        else:
+                            yeni_borc = max(0, mevcut_borc - islem_tutari)
+                            mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL ödeme yapıldı!"
+                            
+                        ws_kartlar.update_cell(row_idx, 4, yeni_borc)
+                        st.success(mesaj)
+                        time.sleep(1)
+                        clear_cache_and_rerun()
+                    else:
+                        st.error("Lütfen sıfırdan büyük bir tutar girin.")
+                        
+        with kk_borc_kol2:
+            st.write("### 📊 Güncel Kart Durumları")
+            df_goster_kk = df_kartlar.copy()
+            df_goster_kk['Kalan Limit'] = pd.to_numeric(df_goster_kk['kart_limit']) - pd.to_numeric(df_goster_kk['guncel_borc'])
+            df_goster_kk = df_goster_kk.rename(columns={'kart_adi': 'Kart Adı', 'kart_limit': 'Limit', 'guncel_borc': 'Güncel Borç'})
+            st.dataframe(df_goster_kk[['Kart Adı', 'Limit', 'Güncel Borç', 'Kalan Limit']], use_container_width=True, hide_index=True)
+
+    st.divider()
+    
     st.subheader("🤝 Elden / Eski Borç Takibi")
     with st.expander("➕ Yeni Borç/Yükümlülük Ekle", expanded=True):
         with st.form("borc_ekle_formu"):
@@ -613,19 +655,18 @@ with sekme_borclar:
                 else: 
                     st.error("Lütfen bir isim ve tutar gir!")
 
-    st.divider()
-    st.write("### Mevcut Borç Listen")
     if not df_borclar.empty:
         df_goster_borc = df_borclar.copy()
         df_goster_borc['Kalan Borç'] = pd.to_numeric(df_goster_borc['toplam_miktar']) - pd.to_numeric(df_goster_borc['odenen'])
         df_goster_borc = df_goster_borc.rename(columns={'borc_adi': 'Açıklama', 'toplam_miktar': 'Toplam', 'odenen': 'Ödenen'})
         
+        st.write("### Mevcut Elden Borç Listen")
         st.dataframe(df_goster_borc[['Açıklama', 'Toplam', 'Ödenen', 'Kalan Borç']], use_container_width=True, hide_index=True)
         st.write("---")
         col1, col2 = st.columns(2)
         
         with col1:
-            secilen = st.selectbox("İşlem Yapılacak Borç", df_goster_borc['Açıklama'].tolist())
+            secilen = st.selectbox("İşlem Yapılacak Elden Borç", df_goster_borc['Açıklama'].tolist())
             odeme_tutari = st.number_input("Ödenen Miktarı Güncelle (TL)", min_value=0.0, step=50.0)
             
             if st.button("Ödemeyi Kaydet"):
@@ -640,5 +681,3 @@ with sekme_borclar:
                 row_idx = int(df_borclar[df_borclar['borc_adi'] == secilen].index[0] + 2)
                 ws_borclar.delete_rows(row_idx)
                 clear_cache_and_rerun()
-    else: 
-        st.info("Henüz kaydedilmiş bir elden borç bulunmuyor.")
