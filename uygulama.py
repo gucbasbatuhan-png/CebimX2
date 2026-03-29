@@ -605,6 +605,42 @@ with sekme_tuccar:
 # --- SEKME 9: HEDEFLER ---
 with sekme_hedef:
     st.subheader("🎯 Tasarruf Hedefleri")
+
+    # --- YENİ SADELEŞTİRİLMİŞ MEVCUT DURUM GÖRÜNÜMÜ ---
+    if not df_hedefler.empty:
+        st.subheader("🎯 Mevcut Durum")
+        # Hedefleri tersten sıralayarak en yeniyi en üste alıyoruz
+        goals = df_hedefler.sort_values(by="id", ascending=False)
+        
+        for _, row in goals.iterrows():
+            h_id = row['id']
+            h_tutar = float(row['hedef_tutar'])
+            h_biriken = float(row['biriken'])
+            tamamlama_orani = min(h_biriken / h_tutar if h_tutar > 0 else 0, 1.0)
+            
+            # Kart tasarımı için konteyner ve sütunlar
+            with st.container(border=True):
+                kol_ad, kol_bar, kol_sil = st.columns([5, 4, 1])
+                
+                with kol_ad:
+                    st.markdown(f"**🎯 {row['hedef_adi']}**")
+                    st.write(f"{h_biriken:,.0f} / {h_tutar:,.0f} TL")
+                    
+                with kol_bar:
+                    st.write(f"Tamamlanan: **%{tamamlama_orani * 100:.1f}**")
+                    st.progress(tamamlama_orani)
+                    
+                with kol_sil:
+                    if st.button("🗑️", key=f"sil_hedef_top_{h_id}"):
+                        row_idx = int(df_hedefler[df_hedefler['id'] == h_id].index[0] + 2)
+                        ws_hedefler.delete_rows(row_idx)
+                        clear_cache_and_rerun()
+            st.markdown(" ") # Kartlar arası boşluk
+
+        st.divider()
+
+    # --- YENİ HEDEF OLUŞTURMA FORMU ---
+    st.write("### ➕ Yeni Hedef Oluştur")
     with st.form("hedef_formu", clear_on_submit=True):
         hedef_ad = st.text_input("Yeni Hedefin (Örn: Yeni Parça)")
         hedef_tutari = st.number_input("Hedeflenen Tutar (TL)", min_value=0.0, step=1000.0)
@@ -615,18 +651,8 @@ with sekme_hedef:
                 ws_hedefler.append_row([get_new_id(df_hedefler), hedef_ad, hedef_tutari, hedef_biriken])
                 clear_cache_and_rerun()
 
+    # --- KUMBARAYA PARA AT BÖLÜMÜNÜN YERİNİ KORUYORUZ ---
     if not df_hedefler.empty:
-        st.divider()
-        st.write("📈 **Hedef İlerleme Grafiği:**")
-        df_hedefler["Kalan"] = pd.to_numeric(df_hedefler["hedef_tutar"]) - pd.to_numeric(df_hedefler["biriken"])
-        
-        df_grafik = df_hedefler.copy()
-        df_grafik.rename(columns={'hedef_adi': 'Hedef Adı', 'biriken': 'Biriken', 'hedef_tutar': 'Hedef'}, inplace=True)
-        
-        fig_hedefler = px.bar(df_grafik, y="Hedef Adı", x=["Biriken", "Kalan"], title=None, barmode='stack', orientation='h', color_discrete_map={'Biriken':'#10b981', 'Kalan':'#334155'}) 
-        fig_hedefler.update_layout(xaxis_title="Tutar (TL)", yaxis_title="Hedef Adı", showlegend=False)
-        st.plotly_chart(fig_hedefler, use_container_width=True)
-
         st.divider()
         st.write("### 💰 Kumbaraya Para At")
         kol_hedef1, kol_hedef2 = st.columns(2)
@@ -639,8 +665,11 @@ with sekme_hedef:
                     row_idx = int(df_hedefler[df_hedefler['hedef_adi'] == secilen_hedef].index[0] + 2)
                     mevcut_biriken = float(df_hedefler.loc[row_idx-2, 'biriken'])
                     yeni_biriken = mevcut_biriken + eklenecek_tutar
+                    
+                    # 1. Hedefin içindeki parayı artırıyoruz
                     ws_hedefler.update_cell(row_idx, 4, yeni_biriken)
                     
+                    # 2. Cebinden parayı (Nakitten) Gider olarak düşüyoruz
                     zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
                     ws_islemler.append_row([get_new_id(df_islemler), "Gider", f"Kumbara: {secilen_hedef}", eklenecek_tutar, zaman, "İhtiyaç", "Diğer"])
                     
@@ -649,26 +678,6 @@ with sekme_hedef:
                     clear_cache_and_rerun()
                 else:
                     st.error("Lütfen sıfırdan büyük bir tutar gir.")
-
-        st.divider()
-        st.write("### 📋 Mevcut Hedeflerin")
-        goals = df_hedefler.sort_values(by="id", ascending=False)
-        for _, row in goals.iterrows():
-            h_id = row['id']
-            h_tutar = float(row['hedef_tutar'])
-            h_biriken = float(row['biriken'])
-            hkol1, hkol2, hkol3 = st.columns([6, 3, 1])
-            with hkol1:
-                st.markdown(f"**🎯 {row['hedef_adi']}** - ({h_biriken:,.0f} / {h_tutar:,.0f} TL)")
-                st.write(f"Tamamlanan: **%{min(h_biriken / h_tutar if h_tutar > 0 else 0, 1.0) * 100:.1f}**")
-            with hkol2:
-                 st.progress(min(h_biriken / h_tutar if h_tutar > 0 else 0, 1.0))
-            if hkol3.button("🗑️", key=f"sil_hedef_{h_id}"):
-                row_idx = int(df_hedefler[df_hedefler['id'] == h_id].index[0] + 2)
-                ws_hedefler.delete_rows(row_idx)
-                clear_cache_and_rerun()
-            st.markdown("---")
-
 # --- SEKME 10: ENFLASYON ---
 with sekme_enf:
     st.subheader("👻 Enflasyon Simülatörü")
