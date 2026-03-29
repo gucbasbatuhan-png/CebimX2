@@ -517,10 +517,11 @@ with sekme_tuccar:
             st.markdown("---")
 
 # --- SEKME 9: HEDEFLER ---
+# --- SEKME 9: HEDEFLER ---
 with sekme_hedef:
     st.subheader("🎯 Tasarruf Hedefleri")
     with st.form("hedef_formu", clear_on_submit=True):
-        hedef_ad = st.text_input("Hedefin (Örn: Yeni Parça)")
+        hedef_ad = st.text_input("Yeni Hedefin (Örn: Yeni Parça)")
         hedef_tutari = st.number_input("Hedeflenen Tutar (TL)", min_value=0.0, step=1000.0)
         hedef_biriken = st.number_input("Şu An Elindeki (TL)", min_value=0.0, step=100.0)
         
@@ -542,6 +543,35 @@ with sekme_hedef:
         st.plotly_chart(fig_hedefler, use_container_width=True)
 
         st.divider()
+        
+        # --- YENİ EKLENEN PARA EKLEME BÖLÜMÜ (NAKİTTEN DÜŞEN VERSİYON) ---
+        st.write("### 💰 Kumbaraya Para At")
+        kol_hedef1, kol_hedef2 = st.columns(2)
+        with kol_hedef1:
+            secilen_hedef = st.selectbox("Hangi Hedefe Para Ekliyorsun?", df_hedefler['hedef_adi'].tolist())
+            eklenecek_tutar = st.number_input("Eklenecek Tutar (TL)", min_value=0.0, step=100.0)
+            
+            if st.button("Parayı Ekle"):
+                if eklenecek_tutar > 0:
+                    row_idx = int(df_hedefler[df_hedefler['hedef_adi'] == secilen_hedef].index[0] + 2)
+                    mevcut_biriken = float(df_hedefler.loc[row_idx-2, 'biriken'])
+                    yeni_biriken = mevcut_biriken + eklenecek_tutar
+                    
+                    # 1. Hedefin içindeki parayı artırıyoruz
+                    ws_hedefler.update_cell(row_idx, 4, yeni_biriken)
+                    
+                    # 2. Cebinden parayı (Nakitten) Gider olarak düşüyoruz
+                    zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    ws_islemler.append_row([get_new_id(df_islemler), "Gider", f"Kumbara: {secilen_hedef}", eklenecek_tutar, zaman, "İhtiyaç", "Diğer"])
+                    
+                    st.success(f"✅ {secilen_hedef} kumbarasına {eklenecek_tutar:,.2f} TL atıldı ve nakit bakiyenden düşüldü!")
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+                else:
+                    st.error("Lütfen sıfırdan büyük bir tutar gir.")
+
+        st.divider()
+        st.write("### 📋 Mevcut Hedeflerin")
         goals = df_hedefler.sort_values(by="id", ascending=False)
         for _, row in goals.iterrows():
             h_id = row['id']
@@ -560,7 +590,6 @@ with sekme_hedef:
                 ws_hedefler.delete_rows(row_idx)
                 clear_cache_and_rerun()
             st.markdown("---")
-
 # --- SEKME 10: ENFLASYON ---
 with sekme_enf:
     st.subheader("👻 Enflasyon Simülatörü")
