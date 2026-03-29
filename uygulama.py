@@ -104,11 +104,11 @@ except Exception as e:
     st.stop()
 
 if df_yastik.empty:
-    ws_yastik.append_row(['USD', 0])
-    ws_yastik.append_row(['EUR', 0])
-    ws_yastik.append_row(['GA', 0])
-    ws_yastik.append_row(['BTC', 0])
-    ws_yastik.append_row(['ETH', 0])
+    ws_yastik.append_row(['Genel Kasa - USD', 0])
+    ws_yastik.append_row(['Genel Kasa - EUR', 0])
+    ws_yastik.append_row(['Genel Kasa - GA', 0])
+    ws_yastik.append_row(['Genel Kasa - BTC', 0])
+    ws_yastik.append_row(['Genel Kasa - ETH', 0])
     clear_cache_and_rerun()
 
 # --- 6. CANLI PİYASALAR VE KRİPTO RADARI ---
@@ -152,7 +152,6 @@ st.divider()
 # --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK ---
 if not df_islemler.empty:
     toplam_gelir = df_islemler[df_islemler['tip'] == 'Gelir']['miktar'].sum()
-    # YENİ MANTIK: Sadece 'Gider' olanlar nakitten düşer. 'KK Gider' olanlar nakitten DÜŞMEZ!
     toplam_nakit_gider = df_islemler[df_islemler['tip'] == 'Gider']['miktar'].sum()
     toplam_tum_giderler = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]['miktar'].sum()
 else:
@@ -169,25 +168,39 @@ else:
     toplam_limit = 0.0
     toplam_kk_borc = 0.0
 
-if not df_yastik.empty:
-    yastik_dict = dict(zip(df_yastik['varlik_tipi'], df_yastik['miktar']))
-else:
-    yastik_dict = {}
-
-yastik_usd_tl = float(yastik_dict.get('USD', 0)) * st.session_state.usd_try
-yastik_eur_tl = float(yastik_dict.get('EUR', 0)) * st.session_state.eur_try
-yastik_ga_tl = float(yastik_dict.get('GA', 0)) * st.session_state.gr_altin
-yastik_btc_tl = float(yastik_dict.get('BTC', 0)) * st.session_state.btc_try
-yastik_eth_tl = float(yastik_dict.get('ETH', 0)) * st.session_state.eth_try
-
-toplam_yastik_tl = yastik_usd_tl + yastik_eur_tl + yastik_ga_tl + yastik_btc_tl + yastik_eth_tl
-
 if not df_borclar.empty:
     toplam_manuel_borc = (pd.to_numeric(df_borclar['toplam_miktar']) - pd.to_numeric(df_borclar['odenen'])).sum()
 else:
     toplam_manuel_borc = 0.0
 
-# Gerçek net varlığı hesaplarken kart borcunu düşüyoruz
+# --- YENİ AİLE KASASI HESAPLAMA MOTORU ---
+toplam_yastik_tl = 0.0
+varlik_kategorileri = {} 
+varlik_tipleri = {'USD': 0, 'EUR': 0, 'GA': 0, 'BTC': 0, 'ETH': 0} 
+
+if not df_yastik.empty:
+    for _, row in df_yastik.iterrows():
+        v_tip = str(row['varlik_tipi'])
+        miktar = float(row['miktar'])
+        
+        # Etiketi (Kendim, Eşim vs.) ve Birimi (USD, GA vs.) ayırıyoruz
+        if " - " in v_tip:
+            kat, birim = v_tip.split(" - ", 1)
+        else:
+            kat = "Genel Kasa"
+            birim = v_tip
+            
+        tl_karsiligi = 0.0
+        if birim == 'USD': tl_karsiligi = miktar * st.session_state.usd_try
+        elif birim == 'EUR': tl_karsiligi = miktar * st.session_state.eur_try
+        elif birim == 'GA': tl_karsiligi = miktar * st.session_state.gr_altin
+        elif birim == 'BTC': tl_karsiligi = miktar * st.session_state.btc_try
+        elif birim == 'ETH': tl_karsiligi = miktar * st.session_state.eth_try
+        
+        toplam_yastik_tl += tl_karsiligi
+        varlik_kategorileri[kat] = varlik_kategorileri.get(kat, 0.0) + tl_karsiligi
+        varlik_tipleri[birim] = varlik_tipleri.get(birim, 0.0) + miktar
+
 gercek_net_varlik = net_nakit + toplam_yastik_tl - toplam_kk_borc - toplam_manuel_borc
 
 kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer"]
@@ -202,12 +215,18 @@ with sekme_ana:
     st.error(f"💎 GERÇEK NET VARLIĞIN (NET WORTH): **{gercek_net_varlik:,.2f} TL**")
     kol1, kol2, kol3 = st.columns(3)
     kol1.metric("Net Nakit (TL)", f"{net_nakit:,.2f} TL")
-    kol2.metric("Toplam Varlıklar", f"{toplam_yastik_tl:,.2f} TL")
+    kol2.metric("Toplam Yastık Altı", f"{toplam_yastik_tl:,.2f} TL")
     kol3.metric("Toplam Kart Borcu", f"{toplam_kk_borc:,.2f} TL")
-    st.divider()
     
+    if varlik_kategorileri:
+        st.divider()
+        st.subheader("👨‍👩‍👦 Aile Varlık Dağılımı (Kimin Kasasında Ne Kadar Var?)")
+        v_kols = st.columns(len(varlik_kategorileri))
+        for i, (kat, tutar) in enumerate(varlik_kategorileri.items()):
+            v_kols[i].success(f"**{kat}** \n\n {tutar:,.2f} TL")
+
+    st.divider()
     st.subheader("🎯 Harcama Dağılımı")
-    # Dağılım grafiğinde hem Nakit hem de KK harcamaları görünsün
     if not df_islemler.empty and not df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])].empty:
         df_gider_tum = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]
         df_kategori = df_gider_tum.groupby('kategori')['miktar'].sum().reset_index()
@@ -277,7 +296,6 @@ with sekme_harcama:
             zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
             ihtiyac_durumu = "İhtiyaç" if "Evet" in h_ihtiyac else "İstek"
             
-            # YENİ MANTIK: Kredi kartıysa tip olarak "KK Gider" yazıyoruz
             if odeme_tipi == "Kredi Kartı" and secilen_kart_id:
                 tip_kayit = "KK Gider"
                 if t_ay > 1:
@@ -343,32 +361,37 @@ with sekme_takvim:
 
 # --- SEKME 5: YASTIK ALTI & KRİPTO ---
 with sekme_yastik:
-    st.subheader("💰 Fiziksel Birikimler ve Soğuk Cüzdan")
+    st.subheader("💰 Aile Varlıkları ve Fiziksel Birikimler")
     y_kol1, y_kol2 = st.columns(2)
     
     with y_kol1:
         st.write("### ➕ Varlık Ekle / Çıkar")
         with st.form("varlik_ekle_cikar_formu", clear_on_submit=True):
+            sahip = st.selectbox("Kimin İçin / Hangi Kasa?", ["Kendim", "Eşim", "Çocuğum", "Ortak Kasa", "Genel Kasa"])
             islem_varlik = st.selectbox("Hangi Varlık?", ["USD", "EUR", "GA", "BTC", "ETH"])
             islem_tipi = st.radio("İşlem Tipi", ["Ekle (+)", "Çıkar (-)"], horizontal=True)
             islem_miktari = st.number_input("Miktar (Örn: 2 gram, 100 dolar)", min_value=0.0, step=1.0, format="%.6f")
             
             if st.form_submit_button("İşlemi Kaydet"):
                 if islem_miktari > 0:
-                    mevcut_miktar = float(yastik_dict.get(islem_varlik, 0))
+                    tam_isim = f"{sahip} - {islem_varlik}"
+                    mevcut_miktar = 0.0
                     
+                    if not df_yastik.empty and tam_isim in df_yastik['varlik_tipi'].values:
+                        mevcut_miktar = float(df_yastik[df_yastik['varlik_tipi'] == tam_isim]['miktar'].iloc[0])
+                        
                     if "Ekle" in islem_tipi:
                         yeni_miktar = mevcut_miktar + islem_miktari
-                        st.success(f"✅ {islem_varlik} cüzdanına eklendi! Yeni Toplam: {yeni_miktar:,.2f}")
+                        st.success(f"✅ {sahip} cüzdanına eklendi! Yeni Toplam: {yeni_miktar:,.2f}")
                     else:
                         yeni_miktar = max(0.0, mevcut_miktar - islem_miktari)
-                        st.success(f"✅ {islem_varlik} cüzdanından çıkarıldı! Yeni Toplam: {yeni_miktar:,.2f}")
+                        st.success(f"✅ {sahip} cüzdanından çıkarıldı! Yeni Toplam: {yeni_miktar:,.2f}")
                     
                     try:
-                        row_idx = int(df_yastik[df_yastik['varlik_tipi'] == islem_varlik].index[0] + 2)
+                        row_idx = int(df_yastik[df_yastik['varlik_tipi'] == tam_isim].index[0] + 2)
                         ws_yastik.update_cell(row_idx, 2, yeni_miktar)
                     except:
-                        ws_yastik.append_row([islem_varlik, yeni_miktar])
+                        ws_yastik.append_row([tam_isim, yeni_miktar])
                         
                     time.sleep(1)
                     clear_cache_and_rerun()
@@ -376,38 +399,32 @@ with sekme_yastik:
                     st.error("Lütfen sıfırdan büyük bir miktar gir.")
                     
         st.write("---")
-        with st.expander("✏️ Toplam Tutarı Elle Düzelt (Eski Sistem)"):
-            with st.form("yastik_form"):
-                yeni_usd = st.number_input("Dolar (USD)", min_value=0.0, step=10.0, value=float(yastik_dict.get('USD', 0)))
-                yeni_eur = st.number_input("Euro (EUR)", min_value=0.0, step=10.0, value=float(yastik_dict.get('EUR', 0)))
-                yeni_ga = st.number_input("Gram Altın (GA)", min_value=0.0, step=0.5, value=float(yastik_dict.get('GA', 0)))
-                yeni_btc = st.number_input("Bitcoin (BTC)", min_value=0.0, step=0.001, format="%.6f", value=float(yastik_dict.get('BTC', 0)))
-                yeni_eth = st.number_input("Ethereum (ETH)", min_value=0.0, step=0.01, format="%.6f", value=float(yastik_dict.get('ETH', 0)))
-                
-                if st.form_submit_button("Cüzdanı Komple Güncelle"):
-                    def safe_update_yastik(varlik, miktar):
-                        try:
-                            row_idx = int(df_yastik[df_yastik['varlik_tipi'] == varlik].index[0] + 2)
-                            ws_yastik.update_cell(row_idx, 2, miktar)
-                        except:
-                            ws_yastik.append_row([varlik, miktar])
-                    
-                    safe_update_yastik('USD', int(yeni_usd))
-                    safe_update_yastik('EUR', int(yeni_eur))
-                    safe_update_yastik('GA', yeni_ga)
-                    safe_update_yastik('BTC', yeni_btc)
-                    safe_update_yastik('ETH', yeni_eth)
-                    st.success("✅ Tüm varlıklar manuel olarak güncellendi!")
-                    time.sleep(1)
-                    clear_cache_and_rerun()
+        st.write("### 🗑️ Sıfırlanan Kayıtları Temizle")
+        df_sifirlar = df_yastik[df_yastik['miktar'] == 0] if not df_yastik.empty else pd.DataFrame()
+        if not df_sifirlar.empty:
+            if st.button("Sıfırlanan (Miktarı 0 Olan) Varlıkları Listeden Sil"):
+                for idx in sorted(df_sifirlar.index.tolist(), reverse=True):
+                    ws_yastik.delete_rows(int(idx + 2))
+                clear_cache_and_rerun()
+        else:
+            st.info("Listede sıfırlanmış boş varlık kaydı yok, her şey temiz.")
                     
     with y_kol2:
-        st.write("### 📊 Cüzdan Dağılımı")
-        st.info(f"💵 **{float(yastik_dict.get('USD', 0)):.2f} USD** = {yastik_usd_tl:,.2f} TL")
-        st.info(f"💶 **{float(yastik_dict.get('EUR', 0)):.2f} EUR** = {yastik_eur_tl:,.2f} TL")
-        st.warning(f"🥇 **{float(yastik_dict.get('GA', 0)):.2f} Altın** = {yastik_ga_tl:,.2f} TL")
-        st.success(f"₿ **{float(yastik_dict.get('BTC', 0)):.6f} BTC** = {yastik_btc_tl:,.2f} TL")
-        st.success(f"⟠ **{float(yastik_dict.get('ETH', 0)):.6f} ETH** = {yastik_eth_tl:,.2f} TL")
+        st.write("### 📊 Toplam Varlık Durumu")
+        st.info(f"💵 Tüm Kasa USD: **{varlik_tipleri.get('USD', 0):,.2f}**")
+        st.info(f"💶 Tüm Kasa EUR: **{varlik_tipleri.get('EUR', 0):,.2f}**")
+        st.warning(f"🥇 Tüm Kasa Altın: **{varlik_tipleri.get('GA', 0):,.2f} Gram**")
+        st.success(f"₿ Tüm Kasa BTC: **{varlik_tipleri.get('BTC', 0):.6f}**")
+        st.success(f"⟠ Tüm Kasa ETH: **{varlik_tipleri.get('ETH', 0):.6f}**")
+        
+        st.divider()
+        st.write("### 🗂️ Kimin Ne Kadarı Var? (Detaylı Kasa)")
+        if not df_yastik.empty:
+            df_dolu = df_yastik[df_yastik['miktar'] > 0]
+            for _, row in df_dolu.iterrows():
+                vtip = str(row['varlik_tipi'])
+                vtip_gosterim = vtip.replace(' - ', ' ➡ ') 
+                st.markdown(f"🔹 **{vtip_gosterim}** : {float(row['miktar']):,.2f}")
 
 # --- SEKME 6: KARTLAR ---
 with sekme_kart:
@@ -487,8 +504,6 @@ with sekme_gecmis:
 # --- SEKME 8: TÜCCAR ---
 with sekme_tuccar:
     st.subheader("🐺 Kurt Tüccar (Al-Sat Envanteri)")
-    
-    # 1. Yeni Ürün Ekleme (Sadece Envantere Alış)
     with st.form("tic_form", clear_on_submit=True):
         st.write("### 📥 Yeni Mal Alışı")
         urun = st.text_input("Ürün Adı (Örn: 2. El Ekran Kartı, Toplu Kasa)")
@@ -496,14 +511,10 @@ with sekme_tuccar:
         
         if st.form_submit_button("Envantere Ekle"):
             if urun and alis > 0:
-                # 1. Ticaret sekmesine kaydet
                 ws_ticaret.append_row([get_new_id(df_ticaret), urun, alis, 0.0])
-                
-                # 2. Nakit bakiyeden (Gider olarak) düş!
                 zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
                 ws_islemler.append_row([get_new_id(df_islemler), "Gider", f"Mal Alışı: {urun}", alis, zaman, "İhtiyaç", "Donanım (Al-Sat)"])
-                
-                st.success(f"📦 {urun} envantere eklendi ve maliyeti ({alis:,.2f} TL) kasadan düşüldü!")
+                st.success(f"📦 {urun} envantere eklendi ve maliyeti kasadan düşüldü!")
                 time.sleep(1)
                 clear_cache_and_rerun()
             else:
@@ -529,14 +540,10 @@ with sekme_tuccar:
                         
                         if c1.button("✅ Satışı Onayla", key=f"sat_btn_{t_id}"):
                             if sat_fiyati > 0:
-                                # 1. Satış fiyatını Ticaret sekmesine yaz
                                 row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
                                 ws_ticaret.update_cell(row_idx, 4, sat_fiyati)
-                                
-                                # 2. Satış gelirini Kasaya (Gelir olarak) ekle!
                                 zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
                                 ws_islemler.append_row([get_new_id(df_islemler), "Gelir", f"Mal Satışı: {row['urun_adi']}", sat_fiyati, zaman, "Gelir", "Donanım (Al-Sat)"])
-                                
                                 st.success("✅ Satış gerçekleşti ve para kasaya eklendi!")
                                 time.sleep(1)
                                 clear_cache_and_rerun()
@@ -556,22 +563,18 @@ with sekme_tuccar:
                 for _, row in df_satilanlar.iterrows():
                     t_id = row['id']
                     t_kar = float(row['tahmini_satis']) - float(row['alis_fiyati'])
-                    
                     st.markdown(f"**{row['urun_adi']}**")
                     c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
                     c1.write(f"Alış: {float(row['alis_fiyati']):,.0f}")
                     c2.write(f"Satış: {float(row['tahmini_satis']):,.0f}")
-                    
-                    if t_kar >= 0:
-                        c3.success(f"+{t_kar:,.0f} TL")
-                    else:
-                        c3.error(f"{t_kar:,.0f} TL")
-                        
+                    if t_kar >= 0: c3.success(f"+{t_kar:,.0f} TL")
+                    else: c3.error(f"{t_kar:,.0f} TL")
                     if c4.button("🗑️", key=f"sil_satilan_{t_id}"):
                         row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
                         ws_ticaret.delete_rows(row_idx)
                         clear_cache_and_rerun()
                     st.markdown("---")
+
 # --- SEKME 9: HEDEFLER ---
 with sekme_hedef:
     st.subheader("🎯 Tasarruf Hedefleri")
@@ -598,8 +601,6 @@ with sekme_hedef:
         st.plotly_chart(fig_hedefler, use_container_width=True)
 
         st.divider()
-        
-        # --- YENİ EKLENEN PARA EKLEME BÖLÜMÜ (NAKİTTEN DÜŞEN VERSİYON) ---
         st.write("### 💰 Kumbaraya Para At")
         kol_hedef1, kol_hedef2 = st.columns(2)
         with kol_hedef1:
@@ -611,11 +612,8 @@ with sekme_hedef:
                     row_idx = int(df_hedefler[df_hedefler['hedef_adi'] == secilen_hedef].index[0] + 2)
                     mevcut_biriken = float(df_hedefler.loc[row_idx-2, 'biriken'])
                     yeni_biriken = mevcut_biriken + eklenecek_tutar
-                    
-                    # 1. Hedefin içindeki parayı artırıyoruz
                     ws_hedefler.update_cell(row_idx, 4, yeni_biriken)
                     
-                    # 2. Cebinden parayı (Nakitten) Gider olarak düşüyoruz
                     zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
                     ws_islemler.append_row([get_new_id(df_islemler), "Gider", f"Kumbara: {secilen_hedef}", eklenecek_tutar, zaman, "İhtiyaç", "Diğer"])
                     
@@ -632,19 +630,18 @@ with sekme_hedef:
             h_id = row['id']
             h_tutar = float(row['hedef_tutar'])
             h_biriken = float(row['biriken'])
-            
             hkol1, hkol2, hkol3 = st.columns([6, 3, 1])
             with hkol1:
                 st.markdown(f"**🎯 {row['hedef_adi']}** - ({h_biriken:,.0f} / {h_tutar:,.0f} TL)")
                 st.write(f"Tamamlanan: **%{min(h_biriken / h_tutar if h_tutar > 0 else 0, 1.0) * 100:.1f}**")
             with hkol2:
                  st.progress(min(h_biriken / h_tutar if h_tutar > 0 else 0, 1.0))
-            
             if hkol3.button("🗑️", key=f"sil_hedef_{h_id}"):
                 row_idx = int(df_hedefler[df_hedefler['id'] == h_id].index[0] + 2)
                 ws_hedefler.delete_rows(row_idx)
                 clear_cache_and_rerun()
             st.markdown("---")
+
 # --- SEKME 10: ENFLASYON ---
 with sekme_enf:
     st.subheader("👻 Enflasyon Simülatörü")
@@ -675,7 +672,6 @@ with sekme_danisman:
             if kat == "Maaş/Gelir" or kat == "Diğer": continue
             ay_sonu_tahmin = (miktar / bugun_gun) * 30
             tahmin_datalari.append({"Kategori": kat, "Şu Anki Harcama": miktar, "Ay Sonu Tahmini": ay_sonu_tahmin})
-            
             if ay_sonu_tahmin > miktar * 1.5: 
                 st.warning(f"🚨 **{kat}** kategorisinde frene bas! Şu an {miktar:,.0f} TL harcadın, bu gidişle ay sonu **{ay_sonu_tahmin:,.0f} TL**'yi bulacak!")
         
@@ -686,43 +682,30 @@ with sekme_danisman:
     st.divider()
     st.subheader("💡 Yapay Zeka Finansal Analizlerin (PRO Sürüm)")
 
-    if gercek_net_varlik > 0:
-        st.success(f"🌟 **Zenginlik Yolculuğu:** Toplam net varlığın pozitif ({gercek_net_varlik:,.2f} TL). Yönün yukarı, böyle devam kanka!")
-    elif gercek_net_varlik < 0:
-        st.error(f"⚠️ **Borç Batağı Uyarısı:** Tüm varlıklarını satsan bile net varlığın ekside ({gercek_net_varlik:,.2f} TL). Yeni harcamaları kesip borç kapatmaya odaklanmalısın.")
+    if gercek_net_varlik > 0: st.success(f"🌟 **Zenginlik Yolculuğu:** Toplam net varlığın pozitif ({gercek_net_varlik:,.2f} TL). Yönün yukarı, böyle devam kanka!")
+    elif gercek_net_varlik < 0: st.error(f"⚠️ **Borç Batağı Uyarısı:** Tüm varlıklarını satsan bile net varlığın ekside ({gercek_net_varlik:,.2f} TL). Yeni harcamaları kesip borç kapatmaya odaklanmalısın.")
 
-    if net_nakit > 0: 
-        st.success(f"📈 **Nakit Kraldır:** Gelirlerin nakit giderlerini tokatlamış, kasada {net_nakit:,.2f} TL fazlan var.")
-    elif net_nakit < 0: 
-        st.error(f"📉 **Acil Durum Freni:** Kırmızı alarm! Nakit giderler geliri {-net_nakit:,.2f} TL aşmış. Eksiye düşüyorsun.")
+    if net_nakit > 0: st.success(f"📈 **Nakit Kraldır:** Gelirlerin nakit giderlerini tokatlamış, kasada {net_nakit:,.2f} TL fazlan var.")
+    elif net_nakit < 0: st.error(f"📉 **Acil Durum Freni:** Kırmızı alarm! Nakit giderler geliri {-net_nakit:,.2f} TL aşmış. Eksiye düşüyorsun.")
 
     if toplam_gelir > 0:
         tasarruf_orani = (net_nakit / toplam_gelir) * 100
-        if tasarruf_orani >= 50:
-            st.success(f"🚀 **Finansal Dahi:** Gelirinin %{tasarruf_orani:.1f}'sini elinde tutuyorsun. Muazzam bir tasarruf oranı!")
-        elif 20 <= tasarruf_orani < 50:
-            st.info(f"👍 **Sağlıklı Ekonomi:** Gelirinin %{tasarruf_orani:.1f}'sini biriktiriyorsun. Gayet ideal bir seviye.")
-        elif 0 < tasarruf_orani < 20:
-            st.warning(f"🐢 **Sınırda Dolaşıyorsun:** Tasarruf oranın sadece %{tasarruf_orani:.1f}. Ay sonunu zor getiriyorsun, harcamaları kısmalısın.")
+        if tasarruf_orani >= 50: st.success(f"🚀 **Finansal Dahi:** Gelirinin %{tasarruf_orani:.1f}'sini elinde tutuyorsun. Muazzam bir tasarruf oranı!")
+        elif 20 <= tasarruf_orani < 50: st.info(f"👍 **Sağlıklı Ekonomi:** Gelirinin %{tasarruf_orani:.1f}'sini biriktiriyorsun. Gayet ideal bir seviye.")
+        elif 0 < tasarruf_orani < 20: st.warning(f"🐢 **Sınırda Dolaşıyorsun:** Tasarruf oranın sadece %{tasarruf_orani:.1f}. Ay sonunu zor getiriyorsun, harcamaları kısmalısın.")
 
-    if toplam_limit > 0 and toplam_kk_borc == 0: 
-        st.success("👑 **Bankaların Düşmanı:** Kredi kartı borcun SIFIR! Finansal özgürlüğün zirvesindesin.")
+    if toplam_limit > 0 and toplam_kk_borc == 0: st.success("👑 **Bankaların Düşmanı:** Kredi kartı borcun SIFIR! Finansal özgürlüğün zirvesindesin.")
     elif toplam_limit > 0:
         doluluk = (toplam_kk_borc / toplam_limit) * 100
-        if doluluk > 60: 
-            st.error(f"💳 **Plastik Kelepçe:** Kredi kartı doluluk oranın %{doluluk:.1f} olmuş. Nakite geçme vakti, bankalara esir olma!")
-        elif doluluk > 30:
-            st.warning(f"💳 **Sarı Alarm:** Kart doluluk oranın %{doluluk:.1f}. Sınıra yaklaşıyorsun, biraz yavaşla.")
-        else: 
-            st.info(f"💳 **Dengeli Kart:** Limit doluluk oranın %{doluluk:.1f}. Kredi notun için mükemmel bir seviye.")
+        if doluluk > 60: st.error(f"💳 **Plastik Kelepçe:** Kredi kartı doluluk oranın %{doluluk:.1f} olmuş. Nakite geçme vakti, bankalara esir olma!")
+        elif doluluk > 30: st.warning(f"💳 **Sarı Alarm:** Kart doluluk oranın %{doluluk:.1f}. Sınıra yaklaşıyorsun, biraz yavaşla.")
+        else: st.info(f"💳 **Dengeli Kart:** Limit doluluk oranın %{doluluk:.1f}. Kredi notun için mükemmel bir seviye.")
 
     if not df_taksitler.empty and toplam_gelir > 0:
         aylik_taksit_yuku = df_taksitler['aylik_tutar'].sum()
         taksit_gelir_orani = (aylik_taksit_yuku / toplam_gelir) * 100
-        if taksit_gelir_orani > 30:
-            st.error(f"⛓️ **Geleceğe İpotek:** Aylık gelirinin %{taksit_gelir_orani:.1f}'si direkt kart taksitlerine gidiyor ({aylik_taksit_yuku:,.2f} TL/ay). Yeni taksite kesinlikle girme!")
-        elif aylik_taksit_yuku > 0:
-            st.warning(f"📅 **Aylık Yük:** Gelecek aylardan yediğin sabit taksit yükün aylık {aylik_taksit_yuku:,.2f} TL.")
+        if taksit_gelir_orani > 30: st.error(f"⛓️ **Geleceğe İpotek:** Aylık gelirinin %{taksit_gelir_orani:.1f}'si direkt kart taksitlerine gidiyor ({aylik_taksit_yuku:,.2f} TL/ay). Yeni taksite kesinlikle girme!")
+        elif aylik_taksit_yuku > 0: st.warning(f"📅 **Aylık Yük:** Gelecek aylardan yediğin sabit taksit yükün aylık {aylik_taksit_yuku:,.2f} TL.")
 
     if not df_islemler.empty:
         df_gider_analiz = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]
@@ -732,33 +715,25 @@ with sekme_danisman:
             st.error(f"🩸 **Kara Delik:** Paran en çok **{en_cok_harcanan}** kategorisinde eriyor ({en_cok_tutar:,.2f} TL). Oraya acil bir bütçe sınırı koymalısın.")
             
         keyfi_toplam = df_gider_analiz[df_gider_analiz['ihtiyac_mi'] == 'İstek']['miktar'].sum()
-        if keyfi_toplam > 0: 
-            st.warning(f"🎮 **İstek vs İhtiyaç:** Bu ara 'Keyfi' harcamalara fazla dalmışsın kanka ({keyfi_toplam:,.2f} TL). Para cebinden sadece zevk için uçmuş.")
+        if keyfi_toplam > 0: st.warning(f"🎮 **İstek vs İhtiyaç:** Bu ara 'Keyfi' harcamalara fazla dalmışsın kanka ({keyfi_toplam:,.2f} TL). Para cebinden sadece zevk için uçmuş.")
 
     toplam_likit = net_nakit + yastik_usd_tl + yastik_eur_tl + yastik_ga_tl
     if toplam_tum_giderler > 0:
         kac_aylik_fon = toplam_likit / (toplam_tum_giderler if toplam_tum_giderler > 0 else 1)
-        if kac_aylik_fon >= 6:
-            st.success(f"🛡️ **Sırtı Yere Gelmez:** Tüm gelirlerin kesilse bile seni {kac_aylik_fon:.1f} ay idare edecek nakit/altın fonun var. Çok güvenli!")
-        elif 1 <= kac_aylik_fon < 6:
-            st.info(f"☂️ **Yağmurluk Hazır:** {kac_aylik_fon:.1f} aylık acil durum fonun var. Hedefin bunu 6 aya çıkarmak olsun.")
-        elif kac_aylik_fon < 1 and toplam_tum_giderler > 0:
-            st.warning("☔ **Savunmasızsın:** Acil bir durumda elindeki likit varlıklar 1 aylık giderini bile karşılamıyor. Acil durum fonu oluşturmaya başla!")
+        if kac_aylik_fon >= 6: st.success(f"🛡️ **Sırtı Yere Gelmez:** Tüm gelirlerin kesilse bile seni {kac_aylik_fon:.1f} ay idare edecek nakit/altın fonun var. Çok güvenli!")
+        elif 1 <= kac_aylik_fon < 6: st.info(f"☂️ **Yağmurluk Hazır:** {kac_aylik_fon:.1f} aylık acil durum fonun var. Hedefin bunu 6 aya çıkarmak olsun.")
+        elif kac_aylik_fon < 1 and toplam_tum_giderler > 0: st.warning("☔ **Savunmasızsın:** Acil bir durumda elindeki likit varlıklar 1 aylık giderini bile karşılamıyor. Acil durum fonu oluşturmaya başla!")
 
-    if yastik_btc_tl + yastik_eth_tl > 10000: 
-        st.success(f"🐋 **Kripto Balinası:** Cüzdan sağlam şişmiş kanka ({yastik_btc_tl + yastik_eth_tl:,.2f} TL).")
-    if yastik_ga_tl > 10000: 
-        st.warning(f"🥇 **Güvenli Liman Ustası:** Yastık altı altınlarla parlıyor ({yastik_ga_tl:,.2f} TL).")
+    if yastik_btc_tl + yastik_eth_tl > 10000: st.success(f"🐋 **Kripto Balinası:** Cüzdan sağlam şişmiş kanka ({yastik_btc_tl + yastik_eth_tl:,.2f} TL).")
+    if yastik_ga_tl > 10000: st.warning(f"🥇 **Güvenli Liman Ustası:** Yastık altı altınlarla parlıyor ({yastik_ga_tl:,.2f} TL).")
 
     if not df_ticaret.empty:
         beklenen_kar = (pd.to_numeric(df_ticaret['tahmini_satis']) - pd.to_numeric(df_ticaret['alis_fiyati'])).sum()
-        if beklenen_kar > 0: 
-            st.info(f"🐺 **Kurt Tüccar Vizyonu:** Al-sat işlemlerinden beklediğin net kâr {beklenen_kar:,.2f} TL.")
+        if beklenen_kar > 0: st.info(f"🐺 **Kurt Tüccar Vizyonu:** Al-sat işlemlerinden beklediğin net kâr {beklenen_kar:,.2f} TL.")
 
     if not df_hedefler.empty:
         tamamlanan = len(df_hedefler[(pd.to_numeric(df_hedefler['biriken']) >= pd.to_numeric(df_hedefler['hedef_tutar'])) & (pd.to_numeric(df_hedefler['hedef_tutar']) > 0)])
-        if tamamlanan > 0: 
-            st.success(f"🎯 **Hedef Avcısı:** Helal olsun! Koyduğun hedeflerden {tamamlanan} tanesini bitirmişsin.")
+        if tamamlanan > 0: st.success(f"🎯 **Hedef Avcısı:** Helal olsun! Koyduğun hedeflerden {tamamlanan} tanesini bitirmişsin.")
 
 # --- SEKME 12: BORÇLAR ---
 with sekme_borclar:
@@ -786,7 +761,6 @@ with sekme_borclar:
                         else:
                             yeni_borc = max(0, mevcut_borc - islem_tutari)
                             mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL ödeme yapıldı!"
-                            # YENİ MANTIK: Kart borcunu ödediğin an, cüzdanından gerçek Nakit Gider olarak düşer!
                             zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
                             ws_islemler.append_row([get_new_id(df_islemler), "Gider", f"{secilen_kart_adi} Ekstre Ödemesi", islem_tutari, zaman, "İhtiyaç", "Diğer"])
                             
