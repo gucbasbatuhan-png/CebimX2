@@ -57,7 +57,6 @@ def get_df(sheet_name):
             data = worksheet.get_all_records()
             df = pd.DataFrame(data)
             
-            # Başlıkları eksik sayfaları otomatik onar
             if not df.empty and 'id' not in df.columns and sheet_name in cols:
                 worksheet.insert_row(cols[sheet_name], index=1)
                 data = worksheet.get_all_records()
@@ -75,12 +74,10 @@ def clear_cache_and_rerun():
     st.cache_resource.clear()
     st.rerun()
 
-# YENİ: VERİ TEMİZLEME MOTORU (KURŞUN GEÇİRMEZ SİSTEM)
 def clean_numeric(df, columns):
     if not df.empty:
         for col in columns:
             if col in df.columns:
-                # Virgülleri noktaya çevir, boşlukları sil, harfleri/boşlukları 0'a eşitle!
                 df[col] = df[col].astype(str).str.replace(',', '.').str.replace(' ', '')
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
     return df
@@ -146,7 +143,6 @@ try:
     df_butceler, ws_butceler = get_df("butceler")
     df_faturalar, ws_faturalar = get_df("faturalar")
     
-    # KORUYUCU KALKANI ÇALIŞTIR (Matematiksel hata oluşmasını engeller)
     df_islemler = clean_numeric(df_islemler, ['miktar'])
     df_ticaret = clean_numeric(df_ticaret, ['alis_fiyati', 'tahmini_satis'])
     df_hedefler = clean_numeric(df_hedefler, ['hedef_tutar', 'biriken'])
@@ -300,15 +296,15 @@ with sekme_ana:
     with kol_ana1:
         st.subheader("🧾 Aylık Sabit Görev / Fatura Checklist'i")
         if not df_faturalar.empty:
-            for _, row in df_faturalar.iterrows():
+            for idx, row in df_faturalar.iterrows(): # index eklendi (benzersiz kimlik için)
                 f_id = row['id']
                 eski_durum = str(row['durum']).lower() == 'true'
                 
                 isim_gosterim = f"~~{row['isim']}~~" if eski_durum else f"{row['isim']}"
-                yeni_durum = st.checkbox(isim_gosterim, value=eski_durum, key=f"fat_chk_{f_id}")
+                # YENİ: key parametresine idx (sıra numarası) eklenerek hatanın önüne geçildi!
+                yeni_durum = st.checkbox(isim_gosterim, value=eski_durum, key=f"fat_chk_{idx}_{f_id}")
                 
                 if yeni_durum != eski_durum:
-                    # Index hatasına karşı güvenli row bulma
                     try:
                         row_idx = int(df_faturalar[df_faturalar['id'] == f_id].index[0] + 2)
                         ws_faturalar.update_cell(row_idx, 3, str(yeni_durum))
@@ -447,10 +443,11 @@ with sekme_harcama:
                 
     if not df_faturalar.empty:
         with st.expander("🗑️ Checklist'ten Görev / Fatura Sil"):
-            for _, row in df_faturalar.iterrows():
+            for idx, row in df_faturalar.iterrows(): # index eklendi (benzersiz kimlik için)
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"📝 {row['isim']}")
-                if c2.button("Listeden Sil", key=f"sil_fat_list_{row['id']}"):
+                # YENİ: key parametresine idx eklenerek hatanın önüne geçildi!
+                if c2.button("Listeden Sil", key=f"sil_fat_list_{idx}_{row['id']}"):
                     row_idx = int(df_faturalar[df_faturalar['id'] == row['id']].index[0] + 2)
                     ws_faturalar.delete_rows(row_idx)
                     clear_cache_and_rerun()
