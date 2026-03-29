@@ -66,17 +66,12 @@ if not st.session_state.giris_yapildi:
             giris_btn = st.button("Giriş Yap", use_container_width=True)
             
             if giris_btn:
-                if kadi == "admin" and sifre == "ipekeva2024":
+                # Eğer şifreyi Secrets'a taşıdıysan burası böyle olmalı:
+                if kadi == "admin" and sifre == st.secrets["kullanici"]["sifre"]:
                     st.success("✅ Başarıyla giriş yaptınız!")
                     time.sleep(1) 
                     st.session_state.giris_yapildi = True
                     st.session_state.kullanici_tipi = "gercek"
-                    st.rerun()
-                elif kadi == "deneme" and sifre == "deneme":
-                    st.success("✅ Başarıyla giriş yaptınız!")
-                    time.sleep(1)
-                    st.session_state.giris_yapildi = True
-                    st.session_state.kullanici_tipi = "sahte"
                     st.rerun()
                 else:
                     st.error("❌ Lütfen kullanıcı adı ve şifrenizi kontrol edin.")
