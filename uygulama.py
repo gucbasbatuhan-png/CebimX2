@@ -173,10 +173,10 @@ if not df_borclar.empty:
 else:
     toplam_manuel_borc = 0.0
 
-# --- YENİ AİLE KASASI HESAPLAMA MOTORU ---
+# --- YENİ AİLE KASASI VE SARRAF MOTORU ---
 toplam_yastik_tl = 0.0
 varlik_kategorileri = {} 
-varlik_tipleri = {'USD': 0, 'EUR': 0, 'GA': 0, 'BTC': 0, 'ETH': 0} 
+varlik_tipleri = {'USD': 0, 'EUR': 0, 'GA': 0, 'Çeyrek Altın': 0, 'Yarım Altın': 0, 'Tam Altın': 0, 'Ata Altın': 0, 'BTC': 0, 'ETH': 0} 
 
 if not df_yastik.empty:
     for _, row in df_yastik.iterrows():
@@ -190,9 +190,14 @@ if not df_yastik.empty:
             birim = v_tip
             
         tl_karsiligi = 0.0
+        # SARRAF MATEMATİĞİ
         if birim == 'USD': tl_karsiligi = miktar * st.session_state.usd_try
         elif birim == 'EUR': tl_karsiligi = miktar * st.session_state.eur_try
         elif birim == 'GA': tl_karsiligi = miktar * st.session_state.gr_altin
+        elif birim == 'Çeyrek Altın': tl_karsiligi = miktar * (st.session_state.gr_altin * 1.605)
+        elif birim == 'Yarım Altın': tl_karsiligi = miktar * (st.session_state.gr_altin * 3.21)
+        elif birim == 'Tam Altın': tl_karsiligi = miktar * (st.session_state.gr_altin * 6.42)
+        elif birim == 'Ata Altın': tl_karsiligi = miktar * (st.session_state.gr_altin * 6.61)
         elif birim == 'BTC': tl_karsiligi = miktar * st.session_state.btc_try
         elif birim == 'ETH': tl_karsiligi = miktar * st.session_state.eth_try
         
@@ -200,10 +205,14 @@ if not df_yastik.empty:
         varlik_kategorileri[kat] = varlik_kategorileri.get(kat, 0.0) + tl_karsiligi
         varlik_tipleri[birim] = varlik_tipleri.get(birim, 0.0) + miktar
 
-# DANIŞMAN İÇİN ESKİ DEĞİŞKENLERİ KÖPRÜLÜYORUZ (HATA BURADAN ÇÖZÜLDÜ)
+# DANIŞMAN İÇİN ESKİ DEĞİŞKENLERİ KÖPRÜLÜYORUZ (TÜM ALTINLAR EKLENDİ)
 yastik_usd_tl = varlik_tipleri.get('USD', 0) * st.session_state.usd_try
 yastik_eur_tl = varlik_tipleri.get('EUR', 0) * st.session_state.eur_try
-yastik_ga_tl = varlik_tipleri.get('GA', 0) * st.session_state.gr_altin
+yastik_ga_tl = (varlik_tipleri.get('GA', 0) * st.session_state.gr_altin) + \
+               (varlik_tipleri.get('Çeyrek Altın', 0) * (st.session_state.gr_altin * 1.605)) + \
+               (varlik_tipleri.get('Yarım Altın', 0) * (st.session_state.gr_altin * 3.21)) + \
+               (varlik_tipleri.get('Tam Altın', 0) * (st.session_state.gr_altin * 6.42)) + \
+               (varlik_tipleri.get('Ata Altın', 0) * (st.session_state.gr_altin * 6.61))
 yastik_btc_tl = varlik_tipleri.get('BTC', 0) * st.session_state.btc_try
 yastik_eth_tl = varlik_tipleri.get('ETH', 0) * st.session_state.eth_try
 
@@ -374,9 +383,10 @@ with sekme_yastik:
         st.write("### ➕ Varlık Ekle / Çıkar")
         with st.form("varlik_ekle_cikar_formu", clear_on_submit=True):
             sahip = st.selectbox("Kimin İçin / Hangi Kasa?", ["Kendim", "Eşim", "Çocuğum", "Ortak Kasa", "Genel Kasa"])
-            islem_varlik = st.selectbox("Hangi Varlık?", ["USD", "EUR", "GA", "BTC", "ETH"])
+            # SARRAFIYE LİSTESİ EKLENDİ
+            islem_varlik = st.selectbox("Hangi Varlık?", ["USD", "EUR", "GA", "Çeyrek Altın", "Yarım Altın", "Tam Altın", "Ata Altın", "BTC", "ETH"])
             islem_tipi = st.radio("İşlem Tipi", ["Ekle (+)", "Çıkar (-)"], horizontal=True)
-            islem_miktari = st.number_input("Miktar (Örn: 2 gram, 100 dolar)", min_value=0.0, step=1.0, format="%.6f")
+            islem_miktari = st.number_input("Miktar (Örn: 2 Adet Çeyrek, 100 Dolar)", min_value=0.0, step=1.0, format="%.6f")
             
             if st.form_submit_button("İşlemi Kaydet"):
                 if islem_miktari > 0:
@@ -419,7 +429,18 @@ with sekme_yastik:
         st.write("### 📊 Toplam Varlık Durumu")
         st.info(f"💵 Tüm Kasa USD: **{varlik_tipleri.get('USD', 0):,.2f}**")
         st.info(f"💶 Tüm Kasa EUR: **{varlik_tipleri.get('EUR', 0):,.2f}**")
-        st.warning(f"🥇 Tüm Kasa Altın: **{varlik_tipleri.get('GA', 0):,.2f} Gram**")
+        st.warning(f"🥇 Tüm Kasa Gram Altın: **{varlik_tipleri.get('GA', 0):,.2f} Gram**")
+        
+        # SADECE VARSA GÖSTERİLEN ALTIN TÜRLERİ
+        if varlik_tipleri.get('Çeyrek Altın', 0) > 0: 
+            st.warning(f"🪙 Tüm Kasa Çeyrek Altın: **{varlik_tipleri.get('Çeyrek Altın', 0):,.0f} Adet**")
+        if varlik_tipleri.get('Yarım Altın', 0) > 0: 
+            st.warning(f"🪙 Tüm Kasa Yarım Altın: **{varlik_tipleri.get('Yarım Altın', 0):,.0f} Adet**")
+        if varlik_tipleri.get('Tam Altın', 0) > 0: 
+            st.warning(f"🪙 Tüm Kasa Tam Altın: **{varlik_tipleri.get('Tam Altın', 0):,.0f} Adet**")
+        if varlik_tipleri.get('Ata Altın', 0) > 0: 
+            st.warning(f"🪙 Tüm Kasa Ata Altın: **{varlik_tipleri.get('Ata Altın', 0):,.0f} Adet**")
+            
         st.success(f"₿ Tüm Kasa BTC: **{varlik_tipleri.get('BTC', 0):.6f}**")
         st.success(f"⟠ Tüm Kasa ETH: **{varlik_tipleri.get('ETH', 0):.6f}**")
         
