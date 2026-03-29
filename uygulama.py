@@ -8,7 +8,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 # --- 1. SAYFA AYARLARI VE TASARIM ---
-st.set_page_config(page_title="Pro Finans Uygulamam", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CebimX Finans Uygulamam", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -112,7 +112,7 @@ if df_yastik.empty:
     clear_cache_and_rerun()
 
 # --- 6. CANLI PİYASALAR VE KRİPTO RADARI ---
-st.subheader("🌍 Canlı Piyasalar ve Kripto Radarı")
+st.subheader("🌍 Radar:Canlı Piyasalar ve Kripto")
 
 if 'usd_try' not in st.session_state:
     st.session_state.usd_try = 0.0
