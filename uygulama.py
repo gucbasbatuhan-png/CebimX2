@@ -222,7 +222,7 @@ kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Dona
 
 # --- 8. SEKMELER ---
 sekme_ana, sekme_gelir, sekme_harcama, sekme_takvim, sekme_yastik, sekme_kart, sekme_gecmis, sekme_tuccar, sekme_hedef, sekme_enf, sekme_danisman, sekme_borclar = st.tabs([
-    "📊 Kumanda", "🟢 Gelirler", "🛍️ Giderler", "📅 Takvim", "💰 Varlıklar", "💳 Kartlar", "📝 Geçmiş", "🐺 Tüccar", "🎯 Hedefler", "👻 Enflasyon", "🤖 Danışman", "💸 Borçlar"
+    "📊 Ana Sayfa", "🟢 Gelirlerim", "🛍️ Giderlerim", "💸 Borçlarım", "📅 Takvim", "💰 Varlıklarım", "💳 Kartlarım", "📝 Geçmiş", "🐺 Tüccar Modu", "🎯 Hedeflerim", "👻 Enflasyon Hesaplayıcı", "🤖 Danışmanım"
 ])
 
 # --- SEKME 1: ANA KUMANDA ---
