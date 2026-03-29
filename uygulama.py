@@ -152,12 +152,15 @@ st.divider()
 # --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK ---
 if not df_islemler.empty:
     toplam_gelir = df_islemler[df_islemler['tip'] == 'Gelir']['miktar'].sum()
-    toplam_gider = df_islemler[df_islemler['tip'] == 'Gider']['miktar'].sum()
+    # YENİ MANTIK: Sadece 'Gider' olanlar nakitten düşer. 'KK Gider' olanlar nakitten DÜŞMEZ!
+    toplam_nakit_gider = df_islemler[df_islemler['tip'] == 'Gider']['miktar'].sum()
+    toplam_tum_giderler = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]['miktar'].sum()
 else:
     toplam_gelir = 0.0
-    toplam_gider = 0.0
+    toplam_nakit_gider = 0.0
+    toplam_tum_giderler = 0.0
     
-net_nakit = toplam_gelir - toplam_gider
+net_nakit = toplam_gelir - toplam_nakit_gider
 
 if not df_kartlar.empty:
     toplam_limit = df_kartlar['kart_limit'].sum()
@@ -184,6 +187,7 @@ if not df_borclar.empty:
 else:
     toplam_manuel_borc = 0.0
 
+# Gerçek net varlığı hesaplarken kart borcunu düşüyoruz
 gercek_net_varlik = net_nakit + toplam_yastik_tl - toplam_kk_borc - toplam_manuel_borc
 
 kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer"]
@@ -203,9 +207,10 @@ with sekme_ana:
     st.divider()
     
     st.subheader("🎯 Harcama Dağılımı")
-    if not df_islemler.empty and not df_islemler[df_islemler['tip'] == 'Gider'].empty:
-        df_gider = df_islemler[df_islemler['tip'] == 'Gider']
-        df_kategori = df_gider.groupby('kategori')['miktar'].sum().reset_index()
+    # Dağılım grafiğinde hem Nakit hem de KK harcamaları görünsün
+    if not df_islemler.empty and not df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])].empty:
+        df_gider_tum = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]
+        df_kategori = df_gider_tum.groupby('kategori')['miktar'].sum().reset_index()
         df_kategori.columns = ['kategori', 'Tutar']
         fig = px.pie(df_kategori, values='Tutar', names='kategori', hole=0.4, color_discrete_sequence=px.colors.sequential.RdBu)
         st.plotly_chart(fig, use_container_width=True)
@@ -272,7 +277,9 @@ with sekme_harcama:
             zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
             ihtiyac_durumu = "İhtiyaç" if "Evet" in h_ihtiyac else "İstek"
             
+            # YENİ MANTIK: Kredi kartıysa tip olarak "KK Gider" yazıyoruz
             if odeme_tipi == "Kredi Kartı" and secilen_kart_id:
+                tip_kayit = "KK Gider"
                 if t_ay > 1:
                     aylik = h_miktar / t_ay
                     ws_taksitler.append_row([get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik, t_ay])
@@ -280,8 +287,10 @@ with sekme_harcama:
                 row_idx = int(df_kartlar[df_kartlar['id'] == secilen_kart_id].index[0] + 2)
                 yeni_borc = float(df_kartlar.loc[row_idx-2, 'guncel_borc']) + h_miktar
                 ws_kartlar.update_cell(row_idx, 4, yeni_borc)
+            else:
+                tip_kayit = "Gider"
                 
-            ws_islemler.append_row([get_new_id(df_islemler), "Gider", h_kategori, h_miktar, zaman, ihtiyac_durumu, h_kategori])
+            ws_islemler.append_row([get_new_id(df_islemler), tip_kayit, h_kategori, h_miktar, zaman, ihtiyac_durumu, h_kategori])
             st.success("✅ Harcama başarıyla işlendi!")
             time.sleep(1)
             clear_cache_and_rerun()
@@ -383,8 +392,8 @@ with sekme_yastik:
                         except:
                             ws_yastik.append_row([varlik, miktar])
                     
-                    safe_update_yastik('USD', yeni_usd)
-                    safe_update_yastik('EUR', yeni_eur)
+                    safe_update_yastik('USD', int(yeni_usd))
+                    safe_update_yastik('EUR', int(yeni_eur))
                     safe_update_yastik('GA', yeni_ga)
                     safe_update_yastik('BTC', yeni_btc)
                     safe_update_yastik('ETH', yeni_eth)
@@ -460,8 +469,10 @@ with sekme_gecmis:
             
             if row['tip'] == "Gelir": 
                 kol2.markdown("🟢 **Gelir**")
+            elif row['tip'] == "KK Gider": 
+                kol2.markdown("🟠 **Kart Gideri**")
             else: 
-                kol2.markdown("🔴 **Gider**")
+                kol2.markdown("🔴 **Nakit Gider**")
                 
             kol3.write(f"📁 {row['kategori']}")
             kol4.write(f"📝 {row['isim']}")
@@ -566,7 +577,7 @@ with sekme_danisman:
     mevcut_ay = f"{datetime.now().year}-{datetime.now().month:02d}"
     
     if not df_islemler.empty:
-        bu_ay_df = df_islemler[(df_islemler['tip'] == 'Gider') & (df_islemler['tarih'].astype(str).str.startswith(mevcut_ay))]
+        bu_ay_df = df_islemler[(df_islemler['tip'].isin(['Gider', 'KK Gider'])) & (df_islemler['tarih'].astype(str).str.startswith(mevcut_ay))]
         bu_ay_giderler = bu_ay_df.groupby('kategori')['miktar'].sum().to_dict() if not bu_ay_df.empty else {}
     else:
         bu_ay_giderler = {}
@@ -591,19 +602,16 @@ with sekme_danisman:
     st.divider()
     st.subheader("💡 Yapay Zeka Finansal Analizlerin (PRO Sürüm)")
 
-    # 1. Net Varlık ve Borç Batağı Analizi
     if gercek_net_varlik > 0:
         st.success(f"🌟 **Zenginlik Yolculuğu:** Toplam net varlığın pozitif ({gercek_net_varlik:,.2f} TL). Yönün yukarı, böyle devam kanka!")
     elif gercek_net_varlik < 0:
         st.error(f"⚠️ **Borç Batağı Uyarısı:** Tüm varlıklarını satsan bile net varlığın ekside ({gercek_net_varlik:,.2f} TL). Yeni harcamaları kesip borç kapatmaya odaklanmalısın.")
 
-    # 2. Nakit Akışı Analizi
     if net_nakit > 0: 
-        st.success(f"📈 **Nakit Kraldır:** Gelirlerin giderlerini tokatlamış, kasada {net_nakit:,.2f} TL fazlan var.")
+        st.success(f"📈 **Nakit Kraldır:** Gelirlerin nakit giderlerini tokatlamış, kasada {net_nakit:,.2f} TL fazlan var.")
     elif net_nakit < 0: 
-        st.error(f"📉 **Acil Durum Freni:** Kırmızı alarm! Giderler geliri {-net_nakit:,.2f} TL aşmış. Eksiye düşüyorsun.")
+        st.error(f"📉 **Acil Durum Freni:** Kırmızı alarm! Nakit giderler geliri {-net_nakit:,.2f} TL aşmış. Eksiye düşüyorsun.")
 
-    # 3. Tasarruf Oranı (Savings Rate)
     if toplam_gelir > 0:
         tasarruf_orani = (net_nakit / toplam_gelir) * 100
         if tasarruf_orani >= 50:
@@ -613,7 +621,6 @@ with sekme_danisman:
         elif 0 < tasarruf_orani < 20:
             st.warning(f"🐢 **Sınırda Dolaşıyorsun:** Tasarruf oranın sadece %{tasarruf_orani:.1f}. Ay sonunu zor getiriyorsun, harcamaları kısmalısın.")
 
-    # 4. Kredi Kartı Bağımlılığı
     if toplam_limit > 0 and toplam_kk_borc == 0: 
         st.success("👑 **Bankaların Düşmanı:** Kredi kartı borcun SIFIR! Finansal özgürlüğün zirvesindesin.")
     elif toplam_limit > 0:
@@ -625,7 +632,6 @@ with sekme_danisman:
         else: 
             st.info(f"💳 **Dengeli Kart:** Limit doluluk oranın %{doluluk:.1f}. Kredi notun için mükemmel bir seviye.")
 
-    # 5. Geleceğe İpotek (Aylık Taksit Yükü)
     if not df_taksitler.empty and toplam_gelir > 0:
         aylik_taksit_yuku = df_taksitler['aylik_tutar'].sum()
         taksit_gelir_orani = (aylik_taksit_yuku / toplam_gelir) * 100
@@ -634,36 +640,32 @@ with sekme_danisman:
         elif aylik_taksit_yuku > 0:
             st.warning(f"📅 **Aylık Yük:** Gelecek aylardan yediğin sabit taksit yükün aylık {aylik_taksit_yuku:,.2f} TL.")
 
-    # 6. En Çok Kan Kaybeden Kategori (Kara Delik)
     if not df_islemler.empty:
-        df_gider = df_islemler[df_islemler['tip'] == 'Gider']
-        if not df_gider.empty:
-            en_cok_harcanan = df_gider.groupby('kategori')['miktar'].sum().idxmax()
-            en_cok_tutar = df_gider.groupby('kategori')['miktar'].sum().max()
+        df_gider_analiz = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]
+        if not df_gider_analiz.empty:
+            en_cok_harcanan = df_gider_analiz.groupby('kategori')['miktar'].sum().idxmax()
+            en_cok_tutar = df_gider_analiz.groupby('kategori')['miktar'].sum().max()
             st.error(f"🩸 **Kara Delik:** Paran en çok **{en_cok_harcanan}** kategorisinde eriyor ({en_cok_tutar:,.2f} TL). Oraya acil bir bütçe sınırı koymalısın.")
             
-        keyfi_toplam = df_gider[df_gider['ihtiyac_mi'] == 'İstek']['miktar'].sum()
+        keyfi_toplam = df_gider_analiz[df_gider_analiz['ihtiyac_mi'] == 'İstek']['miktar'].sum()
         if keyfi_toplam > 0: 
             st.warning(f"🎮 **İstek vs İhtiyaç:** Bu ara 'Keyfi' harcamalara fazla dalmışsın kanka ({keyfi_toplam:,.2f} TL). Para cebinden sadece zevk için uçmuş.")
 
-    # 7. Acil Durum Fonu (Finansal Kalkan)
-    toplam_likit = net_nakit + yastik_usd_tl + yastik_eur_tl + yastik_ga_tl # Kripto çok riskli olduğu için fona dahil edilmez
-    if toplam_gider > 0:
-        kac_aylik_fon = toplam_likit / (toplam_gider if toplam_gider > 0 else 1)
+    toplam_likit = net_nakit + yastik_usd_tl + yastik_eur_tl + yastik_ga_tl
+    if toplam_tum_giderler > 0:
+        kac_aylik_fon = toplam_likit / (toplam_tum_giderler if toplam_tum_giderler > 0 else 1)
         if kac_aylik_fon >= 6:
             st.success(f"🛡️ **Sırtı Yere Gelmez:** Tüm gelirlerin kesilse bile seni {kac_aylik_fon:.1f} ay idare edecek nakit/altın fonun var. Çok güvenli!")
         elif 1 <= kac_aylik_fon < 6:
             st.info(f"☂️ **Yağmurluk Hazır:** {kac_aylik_fon:.1f} aylık acil durum fonun var. Hedefin bunu 6 aya çıkarmak olsun.")
-        elif kac_aylik_fon < 1 and toplam_gider > 0:
+        elif kac_aylik_fon < 1 and toplam_tum_giderler > 0:
             st.warning("☔ **Savunmasızsın:** Acil bir durumda elindeki likit varlıklar 1 aylık giderini bile karşılamıyor. Acil durum fonu oluşturmaya başla!")
 
-    # 8. Kripto ve Altın Tavsiyesi
     if yastik_btc_tl + yastik_eth_tl > 10000: 
-        st.success(f"🐋 **Kripto Balinası:** Cüzdan sağlam şişmiş kanka ({yastik_btc_tl + yastik_eth_tl:,.2f} TL). Piyasadaki dalgalanmalara dikkat et.")
+        st.success(f"🐋 **Kripto Balinası:** Cüzdan sağlam şişmiş kanka ({yastik_btc_tl + yastik_eth_tl:,.2f} TL).")
     if yastik_ga_tl > 10000: 
-        st.warning(f"🥇 **Güvenli Liman Ustası:** Yastık altı altınlarla parlıyor ({yastik_ga_tl:,.2f} TL). Enflasyona karşı süper kalkan.")
+        st.warning(f"🥇 **Güvenli Liman Ustası:** Yastık altı altınlarla parlıyor ({yastik_ga_tl:,.2f} TL).")
 
-    # 9. Ticaret ve Hedefler
     if not df_ticaret.empty:
         beklenen_kar = (pd.to_numeric(df_ticaret['tahmini_satis']) - pd.to_numeric(df_ticaret['alis_fiyati'])).sum()
         if beklenen_kar > 0: 
@@ -700,6 +702,9 @@ with sekme_borclar:
                         else:
                             yeni_borc = max(0, mevcut_borc - islem_tutari)
                             mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL ödeme yapıldı!"
+                            # YENİ MANTIK: Kart borcunu ödediğin an, cüzdanından gerçek Nakit Gider olarak düşer!
+                            zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            ws_islemler.append_row([get_new_id(df_islemler), "Gider", f"{secilen_kart_adi} Ekstre Ödemesi", islem_tutari, zaman, "İhtiyaç", "Diğer"])
                             
                         ws_kartlar.update_cell(row_idx, 4, yeni_borc)
                         st.success(mesaj)
