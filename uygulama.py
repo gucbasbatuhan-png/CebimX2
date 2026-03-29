@@ -589,28 +589,81 @@ with sekme_danisman:
             st.plotly_chart(fig_bar, use_container_width=True)
 
     st.divider()
-    st.subheader("💡 Yapay Zeka Finansal Analizlerin")
+    st.subheader("💡 Yapay Zeka Finansal Analizlerin (PRO Sürüm)")
 
+    # 1. Net Varlık ve Borç Batağı Analizi
+    if gercek_net_varlik > 0:
+        st.success(f"🌟 **Zenginlik Yolculuğu:** Toplam net varlığın pozitif ({gercek_net_varlik:,.2f} TL). Yönün yukarı, böyle devam kanka!")
+    elif gercek_net_varlik < 0:
+        st.error(f"⚠️ **Borç Batağı Uyarısı:** Tüm varlıklarını satsan bile net varlığın ekside ({gercek_net_varlik:,.2f} TL). Yeni harcamaları kesip borç kapatmaya odaklanmalısın.")
+
+    # 2. Nakit Akışı Analizi
     if net_nakit > 0: 
         st.success(f"📈 **Nakit Kraldır:** Gelirlerin giderlerini tokatlamış, kasada {net_nakit:,.2f} TL fazlan var.")
     elif net_nakit < 0: 
-        st.error(f"📉 **Acil Durum Freni:** Kırmızı alarm! Giderler geliri {-net_nakit:,.2f} TL aşmış. Fren yapıyoruz.")
+        st.error(f"📉 **Acil Durum Freni:** Kırmızı alarm! Giderler geliri {-net_nakit:,.2f} TL aşmış. Eksiye düşüyorsun.")
 
+    # 3. Tasarruf Oranı (Savings Rate)
+    if toplam_gelir > 0:
+        tasarruf_orani = (net_nakit / toplam_gelir) * 100
+        if tasarruf_orani >= 50:
+            st.success(f"🚀 **Finansal Dahi:** Gelirinin %{tasarruf_orani:.1f}'sini elinde tutuyorsun. Muazzam bir tasarruf oranı!")
+        elif 20 <= tasarruf_orani < 50:
+            st.info(f"👍 **Sağlıklı Ekonomi:** Gelirinin %{tasarruf_orani:.1f}'sini biriktiriyorsun. Gayet ideal bir seviye.")
+        elif 0 < tasarruf_orani < 20:
+            st.warning(f"🐢 **Sınırda Dolaşıyorsun:** Tasarruf oranın sadece %{tasarruf_orani:.1f}. Ay sonunu zor getiriyorsun, harcamaları kısmalısın.")
+
+    # 4. Kredi Kartı Bağımlılığı
     if toplam_limit > 0 and toplam_kk_borc == 0: 
         st.success("👑 **Bankaların Düşmanı:** Kredi kartı borcun SIFIR! Finansal özgürlüğün zirvesindesin.")
     elif toplam_limit > 0:
         doluluk = (toplam_kk_borc / toplam_limit) * 100
-        if doluluk > 50: 
-            st.warning(f"💳 **Plastik Kelepçe:** Kredi kartı doluluk oranın %{doluluk:.1f} olmuş. Nakite geçme vakti.")
+        if doluluk > 60: 
+            st.error(f"💳 **Plastik Kelepçe:** Kredi kartı doluluk oranın %{doluluk:.1f} olmuş. Nakite geçme vakti, bankalara esir olma!")
+        elif doluluk > 30:
+            st.warning(f"💳 **Sarı Alarm:** Kart doluluk oranın %{doluluk:.1f}. Sınıra yaklaşıyorsun, biraz yavaşla.")
         else: 
             st.info(f"💳 **Dengeli Kart:** Limit doluluk oranın %{doluluk:.1f}. Kredi notun için mükemmel bir seviye.")
 
-    if yastik_btc_tl + yastik_eth_tl > 5000: 
-        st.success(f"🐋 **Kripto Balinası:** Cüzdan sağlam şişmiş kanka ({yastik_btc_tl + yastik_eth_tl:,.2f} TL).")
-        
-    if yastik_ga_tl > 5000: 
-        st.warning(f"🥇 **Güvenli Liman Ustası:** Yastık altı altınlarla parlıyor kanka ({yastik_ga_tl:,.2f} TL).")
+    # 5. Geleceğe İpotek (Aylık Taksit Yükü)
+    if not df_taksitler.empty and toplam_gelir > 0:
+        aylik_taksit_yuku = df_taksitler['aylik_tutar'].sum()
+        taksit_gelir_orani = (aylik_taksit_yuku / toplam_gelir) * 100
+        if taksit_gelir_orani > 30:
+            st.error(f"⛓️ **Geleceğe İpotek:** Aylık gelirinin %{taksit_gelir_orani:.1f}'si direkt kart taksitlerine gidiyor ({aylik_taksit_yuku:,.2f} TL/ay). Yeni taksite kesinlikle girme!")
+        elif aylik_taksit_yuku > 0:
+            st.warning(f"📅 **Aylık Yük:** Gelecek aylardan yediğin sabit taksit yükün aylık {aylik_taksit_yuku:,.2f} TL.")
 
+    # 6. En Çok Kan Kaybeden Kategori (Kara Delik)
+    if not df_islemler.empty:
+        df_gider = df_islemler[df_islemler['tip'] == 'Gider']
+        if not df_gider.empty:
+            en_cok_harcanan = df_gider.groupby('kategori')['miktar'].sum().idxmax()
+            en_cok_tutar = df_gider.groupby('kategori')['miktar'].sum().max()
+            st.error(f"🩸 **Kara Delik:** Paran en çok **{en_cok_harcanan}** kategorisinde eriyor ({en_cok_tutar:,.2f} TL). Oraya acil bir bütçe sınırı koymalısın.")
+            
+        keyfi_toplam = df_gider[df_gider['ihtiyac_mi'] == 'İstek']['miktar'].sum()
+        if keyfi_toplam > 0: 
+            st.warning(f"🎮 **İstek vs İhtiyaç:** Bu ara 'Keyfi' harcamalara fazla dalmışsın kanka ({keyfi_toplam:,.2f} TL). Para cebinden sadece zevk için uçmuş.")
+
+    # 7. Acil Durum Fonu (Finansal Kalkan)
+    toplam_likit = net_nakit + yastik_usd_tl + yastik_eur_tl + yastik_ga_tl # Kripto çok riskli olduğu için fona dahil edilmez
+    if toplam_gider > 0:
+        kac_aylik_fon = toplam_likit / (toplam_gider if toplam_gider > 0 else 1)
+        if kac_aylik_fon >= 6:
+            st.success(f"🛡️ **Sırtı Yere Gelmez:** Tüm gelirlerin kesilse bile seni {kac_aylik_fon:.1f} ay idare edecek nakit/altın fonun var. Çok güvenli!")
+        elif 1 <= kac_aylik_fon < 6:
+            st.info(f"☂️ **Yağmurluk Hazır:** {kac_aylik_fon:.1f} aylık acil durum fonun var. Hedefin bunu 6 aya çıkarmak olsun.")
+        elif kac_aylik_fon < 1 and toplam_gider > 0:
+            st.warning("☔ **Savunmasızsın:** Acil bir durumda elindeki likit varlıklar 1 aylık giderini bile karşılamıyor. Acil durum fonu oluşturmaya başla!")
+
+    # 8. Kripto ve Altın Tavsiyesi
+    if yastik_btc_tl + yastik_eth_tl > 10000: 
+        st.success(f"🐋 **Kripto Balinası:** Cüzdan sağlam şişmiş kanka ({yastik_btc_tl + yastik_eth_tl:,.2f} TL). Piyasadaki dalgalanmalara dikkat et.")
+    if yastik_ga_tl > 10000: 
+        st.warning(f"🥇 **Güvenli Liman Ustası:** Yastık altı altınlarla parlıyor ({yastik_ga_tl:,.2f} TL). Enflasyona karşı süper kalkan.")
+
+    # 9. Ticaret ve Hedefler
     if not df_ticaret.empty:
         beklenen_kar = (pd.to_numeric(df_ticaret['tahmini_satis']) - pd.to_numeric(df_ticaret['alis_fiyati'])).sum()
         if beklenen_kar > 0: 
@@ -619,14 +672,8 @@ with sekme_danisman:
     if not df_hedefler.empty:
         tamamlanan = len(df_hedefler[(pd.to_numeric(df_hedefler['biriken']) >= pd.to_numeric(df_hedefler['hedef_tutar'])) & (pd.to_numeric(df_hedefler['hedef_tutar']) > 0)])
         if tamamlanan > 0: 
-            st.success(f"🎯 **Hedef Avcısı:** Helal olsun kanka! Koyduğun hedeflerden {tamamlanan} tanesini bitirmişsin.")
+            st.success(f"🎯 **Hedef Avcısı:** Helal olsun! Koyduğun hedeflerden {tamamlanan} tanesini bitirmişsin.")
 
-    if not df_islemler.empty:
-        keyfi_toplam = df_islemler[(df_islemler['tip'] == 'Gider') & (df_islemler['ihtiyac_mi'] == 'İstek')]['miktar'].sum()
-        if keyfi_toplam > 0: 
-            st.warning(f"🎮 **İstek vs İhtiyaç:** Bu ara 'Keyfi' harcamalara biraz fazla dalmışsın kanka ({keyfi_toplam:,.2f} TL).")
-
-# --- SEKME 12: BORÇLAR ---
 # --- SEKME 12: BORÇLAR ---
 with sekme_borclar:
     st.subheader("💳 Kredi Kartı Borç Yönetimi")
