@@ -494,11 +494,16 @@ with sekme_tuccar:
         urun = st.text_input("Ürün Adı (Örn: 2. El Ekran Kartı, Toplu Kasa)")
         alis = st.number_input("Alış Fiyatı (Maliyet - TL)", min_value=0.0, step=100.0)
         
-        # Satış fiyatını sormuyoruz, sistemde 0.0 olarak gizli kaydediyoruz.
         if st.form_submit_button("Envantere Ekle"):
             if urun and alis > 0:
+                # 1. Ticaret sekmesine kaydet
                 ws_ticaret.append_row([get_new_id(df_ticaret), urun, alis, 0.0])
-                st.success(f"📦 {urun} envantere eklendi! Satılana kadar depoda bekliyor.")
+                
+                # 2. Nakit bakiyeden (Gider olarak) düş!
+                zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
+                ws_islemler.append_row([get_new_id(df_islemler), "Gider", f"Mal Alışı: {urun}", alis, zaman, "İhtiyaç", "Donanım (Al-Sat)"])
+                
+                st.success(f"📦 {urun} envantere eklendi ve maliyeti ({alis:,.2f} TL) kasadan düşüldü!")
                 time.sleep(1)
                 clear_cache_and_rerun()
             else:
@@ -506,9 +511,6 @@ with sekme_tuccar:
         
     if not df_ticaret.empty:
         st.divider()
-        
-        # DataFrame'i Satılanlar ve Bekleyenler olarak ikiye ayırıyoruz
-        # tahmini_satis (4. sütun) 0 ise hala envanterdedir. Sıfırdan büyükse satılmıştır.
         df_envanter = df_ticaret[df_ticaret['tahmini_satis'] == 0].sort_values(by="id", ascending=False)
         df_satilanlar = df_ticaret[df_ticaret['tahmini_satis'] > 0].sort_values(by="id", ascending=False)
         
@@ -527,9 +529,15 @@ with sekme_tuccar:
                         
                         if c1.button("✅ Satışı Onayla", key=f"sat_btn_{t_id}"):
                             if sat_fiyati > 0:
+                                # 1. Satış fiyatını Ticaret sekmesine yaz
                                 row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
                                 ws_ticaret.update_cell(row_idx, 4, sat_fiyati)
-                                st.success("Satış gerçekleşti!")
+                                
+                                # 2. Satış gelirini Kasaya (Gelir olarak) ekle!
+                                zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
+                                ws_islemler.append_row([get_new_id(df_islemler), "Gelir", f"Mal Satışı: {row['urun_adi']}", sat_fiyati, zaman, "Gelir", "Donanım (Al-Sat)"])
+                                
+                                st.success("✅ Satış gerçekleşti ve para kasaya eklendi!")
                                 time.sleep(1)
                                 clear_cache_and_rerun()
                             else:
