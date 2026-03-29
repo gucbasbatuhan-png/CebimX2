@@ -183,7 +183,6 @@ if not df_yastik.empty:
         v_tip = str(row['varlik_tipi'])
         miktar = float(row['miktar'])
         
-        # Etiketi (Kendim, Eşim vs.) ve Birimi (USD, GA vs.) ayırıyoruz
         if " - " in v_tip:
             kat, birim = v_tip.split(" - ", 1)
         else:
@@ -200,6 +199,13 @@ if not df_yastik.empty:
         toplam_yastik_tl += tl_karsiligi
         varlik_kategorileri[kat] = varlik_kategorileri.get(kat, 0.0) + tl_karsiligi
         varlik_tipleri[birim] = varlik_tipleri.get(birim, 0.0) + miktar
+
+# DANIŞMAN İÇİN ESKİ DEĞİŞKENLERİ KÖPRÜLÜYORUZ (HATA BURADAN ÇÖZÜLDÜ)
+yastik_usd_tl = varlik_tipleri.get('USD', 0) * st.session_state.usd_try
+yastik_eur_tl = varlik_tipleri.get('EUR', 0) * st.session_state.eur_try
+yastik_ga_tl = varlik_tipleri.get('GA', 0) * st.session_state.gr_altin
+yastik_btc_tl = varlik_tipleri.get('BTC', 0) * st.session_state.btc_try
+yastik_eth_tl = varlik_tipleri.get('ETH', 0) * st.session_state.eth_try
 
 gercek_net_varlik = net_nakit + toplam_yastik_tl - toplam_kk_borc - toplam_manuel_borc
 
