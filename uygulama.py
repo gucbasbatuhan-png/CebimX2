@@ -487,36 +487,83 @@ with sekme_gecmis:
 # --- SEKME 8: TÜCCAR ---
 with sekme_tuccar:
     st.subheader("🐺 Kurt Tüccar (Al-Sat Envanteri)")
+    
+    # 1. Yeni Ürün Ekleme (Sadece Envantere Alış)
     with st.form("tic_form", clear_on_submit=True):
-        urun = st.text_input("Ürün")
-        alis = st.number_input("Alış Fiyatı", step=100.0)
-        satis = st.number_input("Hedef Satış", step=100.0)
+        st.write("### 📥 Yeni Mal Alışı")
+        urun = st.text_input("Ürün Adı (Örn: 2. El Ekran Kartı, Toplu Kasa)")
+        alis = st.number_input("Alış Fiyatı (Maliyet - TL)", min_value=0.0, step=100.0)
         
-        if st.form_submit_button("Ekle"):
-            if urun:
-                ws_ticaret.append_row([get_new_id(df_ticaret), urun, alis, satis])
+        # Satış fiyatını sormuyoruz, sistemde 0.0 olarak gizli kaydediyoruz.
+        if st.form_submit_button("Envantere Ekle"):
+            if urun and alis > 0:
+                ws_ticaret.append_row([get_new_id(df_ticaret), urun, alis, 0.0])
+                st.success(f"📦 {urun} envantere eklendi! Satılana kadar depoda bekliyor.")
+                time.sleep(1)
                 clear_cache_and_rerun()
-            
+            else:
+                st.error("Lütfen ürün adı ve maliyet tutarını girin.")
+        
     if not df_ticaret.empty:
         st.divider()
-        tic_kayitlar = df_ticaret.sort_values(by="id", ascending=False)
-        for _, row in tic_kayitlar.iterrows():
-            t_id = row['id']
-            t_kar = float(row['tahmini_satis']) - float(row['alis_fiyati'])
-            
-            tkol1, tkol2, tkol3, tkol4, tkol5 = st.columns([3, 2, 2, 2, 1])
-            tkol1.write(f"🛒 **{row['urun_adi']}**")
-            tkol2.write(f"Alış: {float(row['alis_fiyati']):,.2f} TL")
-            tkol3.write(f"Satış: {float(row['tahmini_satis']):,.2f} TL")
-            tkol4.success(f"Kâr: {t_kar:,.2f} TL")
-            
-            if tkol5.button("🗑️", key=f"sil_tic_{t_id}"):
-                row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
-                ws_ticaret.delete_rows(row_idx)
-                clear_cache_and_rerun()
-            st.markdown("---")
-
-# --- SEKME 9: HEDEFLER ---
+        
+        # DataFrame'i Satılanlar ve Bekleyenler olarak ikiye ayırıyoruz
+        # tahmini_satis (4. sütun) 0 ise hala envanterdedir. Sıfırdan büyükse satılmıştır.
+        df_envanter = df_ticaret[df_ticaret['tahmini_satis'] == 0].sort_values(by="id", ascending=False)
+        df_satilanlar = df_ticaret[df_ticaret['tahmini_satis'] > 0].sort_values(by="id", ascending=False)
+        
+        kol_env, kol_sat = st.columns(2)
+        
+        with kol_env:
+            st.write("### 📦 Elimdeki Envanter")
+            if df_envanter.empty:
+                st.info("Şu an satılmayı bekleyen ürünün yok.")
+            else:
+                for _, row in df_envanter.iterrows():
+                    t_id = row['id']
+                    with st.expander(f"🛒 {row['urun_adi']} (Maliyet: {float(row['alis_fiyati']):,.0f} TL)"):
+                        sat_fiyati = st.number_input("Kaça Sattın? (TL)", min_value=0.0, step=50.0, key=f"satis_input_{t_id}")
+                        c1, c2 = st.columns(2)
+                        
+                        if c1.button("✅ Satışı Onayla", key=f"sat_btn_{t_id}"):
+                            if sat_fiyati > 0:
+                                row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
+                                ws_ticaret.update_cell(row_idx, 4, sat_fiyati)
+                                st.success("Satış gerçekleşti!")
+                                time.sleep(1)
+                                clear_cache_and_rerun()
+                            else:
+                                st.error("Lütfen satış fiyatı girin!")
+                                
+                        if c2.button("🗑️ Sil", key=f"sil_env_{t_id}"):
+                            row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
+                            ws_ticaret.delete_rows(row_idx)
+                            clear_cache_and_rerun()
+                            
+        with kol_sat:
+            st.write("### 💸 Satılanlar ve Kâr Durumu")
+            if df_satilanlar.empty:
+                st.info("Henüz ürün satışı yapmadın.")
+            else:
+                for _, row in df_satilanlar.iterrows():
+                    t_id = row['id']
+                    t_kar = float(row['tahmini_satis']) - float(row['alis_fiyati'])
+                    
+                    st.markdown(f"**{row['urun_adi']}**")
+                    c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
+                    c1.write(f"Alış: {float(row['alis_fiyati']):,.0f}")
+                    c2.write(f"Satış: {float(row['tahmini_satis']):,.0f}")
+                    
+                    if t_kar >= 0:
+                        c3.success(f"+{t_kar:,.0f} TL")
+                    else:
+                        c3.error(f"{t_kar:,.0f} TL")
+                        
+                    if c4.button("🗑️", key=f"sil_satilan_{t_id}"):
+                        row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
+                        ws_ticaret.delete_rows(row_idx)
+                        clear_cache_and_rerun()
+                    st.markdown("---")
 # --- SEKME 9: HEDEFLER ---
 with sekme_hedef:
     st.subheader("🎯 Tasarruf Hedefleri")
