@@ -128,11 +128,11 @@ with kol_kur6:
 
 if guncelle_basildi:
     try:
-        usd = yf.Ticker("TRY=X").history(period="1d")['Close'].iloc[-1]
-        eur = yf.Ticker("EURTRY=X").history(period="1d")['Close'].iloc[-1]
-        altin_ons_usd = yf.Ticker("GC=F").history(period="1d")['Close'].iloc[-1] 
-        btc_usd = yf.Ticker("BTC-USD").history(period="1d")['Close'].iloc[-1]
-        eth_usd = yf.Ticker("ETH-USD").history(period="1d")['Close'].iloc[-1]
+        usd = yf.Ticker("TRY=X").history(period="5d")['Close'].iloc[-1]
+        eur = yf.Ticker("EURTRY=X").history(period="5d")['Close'].iloc[-1]
+        altin_ons_usd = yf.Ticker("GC=F").history(period="5d")['Close'].iloc[-1] 
+        btc_usd = yf.Ticker("BTC-USD").history(period="5d")['Close'].iloc[-1]
+        eth_usd = yf.Ticker("ETH-USD").history(period="5d")['Close'].iloc[-1]
         
         st.session_state.usd_try = usd
         st.session_state.eur_try = eur
