@@ -16,7 +16,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GOOGLE SHEETS BAĞLANTI & HAFIZA (CACHE) MOTORU ---
+# --- 2. GOOGLE SHEETS BAĞLANTI & AKILLI HAFIZA MOTORU ---
 @st.cache_resource
 def get_gsheet_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -28,22 +28,38 @@ def get_gsheet_client():
 def get_df(sheet_name):
     client = get_gsheet_client()
     sh = client.open_by_url(st.secrets["gsheets"]["url"])
-    worksheet = sh.worksheet(sheet_name)
-    data = worksheet.get_all_records()
-    df = pd.DataFrame(data)
-    if df.empty:
-        cols = {
-            "islemler": ["id", "tip", "isim", "miktar", "tarih", "ihtiyac_mi", "kategori"],
-            "ticaret": ["id", "urun_adi", "alis_fiyati", "tahmini_satis"],
-            "hedefler": ["id", "hedef_adi", "hedef_tutar", "biriken"],
-            "kredi_kartlari": ["id", "kart_adi", "kart_limit", "guncel_borc", "hesap_kesim"],
-            "taksitler": ["id", "kart_id", "aciklama", "aylik_tutar", "kalan_ay"],
-            "yastik_alti": ["varlik_tipi", "miktar"],
-            "manuel_borclar": ["id", "borc_adi", "toplam_miktar", "odenen", "tarih"],
-            "abonelikler": ["id", "isim", "tutar", "odeme_gunu"],
-            "butceler": ["id", "kategori", "limit_tutar"]
-        }
-        df = pd.DataFrame(columns=cols.get(sheet_name, []))
+    
+    # 1. AKILLI KONTROL: Sayfa yoksa kendin oluştur!
+    try:
+        worksheet = sh.worksheet(sheet_name)
+    except:
+        worksheet = sh.add_worksheet(title=sheet_name, rows="100", cols="20")
+        
+    cols = {
+        "islemler": ["id", "tip", "isim", "miktar", "tarih", "ihtiyac_mi", "kategori"],
+        "ticaret": ["id", "urun_adi", "alis_fiyati", "tahmini_satis"],
+        "hedefler": ["id", "hedef_adi", "hedef_tutar", "biriken"],
+        "kredi_kartlari": ["id", "kart_adi", "kart_limit", "guncel_borc", "hesap_kesim"],
+        "taksitler": ["id", "kart_id", "aciklama", "aylik_tutar", "kalan_ay"],
+        "yastik_alti": ["varlik_tipi", "miktar"],
+        "manuel_borclar": ["id", "borc_adi", "toplam_miktar", "odenen", "tarih"],
+        "abonelikler": ["id", "isim", "tutar", "odeme_gunu"],
+        "butceler": ["id", "kategori", "limit_tutar"]
+    }
+    
+    tum_hucreler = worksheet.get_all_values()
+    
+    # 2. AKILLI KONTROL: Sayfa boşsa başlıkları kendin yaz!
+    if not tum_hucreler and sheet_name in cols:
+        worksheet.append_row(cols[sheet_name])
+        df = pd.DataFrame(columns=cols[sheet_name])
+    else:
+        try:
+            data = worksheet.get_all_records()
+            df = pd.DataFrame(data)
+        except:
+            df = pd.DataFrame(columns=cols.get(sheet_name, []))
+            
     return df, worksheet
 
 def get_new_id(df):
