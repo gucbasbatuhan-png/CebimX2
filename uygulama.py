@@ -336,32 +336,64 @@ with sekme_takvim:
 with sekme_yastik:
     st.subheader("💰 Fiziksel Birikimler ve Soğuk Cüzdan")
     y_kol1, y_kol2 = st.columns(2)
+    
     with y_kol1:
-        with st.form("yastik_form"):
-            yeni_usd = st.number_input("Dolar (USD)", min_value=0.0, step=10.0, value=float(yastik_dict.get('USD', 0)))
-            yeni_eur = st.number_input("Euro (EUR)", min_value=0.0, step=10.0, value=float(yastik_dict.get('EUR', 0)))
-            yeni_ga = st.number_input("Gram Altın (GA)", min_value=0.0, step=0.5, value=float(yastik_dict.get('GA', 0)))
-            yeni_btc = st.number_input("Bitcoin (BTC)", min_value=0.0, step=0.001, format="%.6f", value=float(yastik_dict.get('BTC', 0)))
-            yeni_eth = st.number_input("Ethereum (ETH)", min_value=0.0, step=0.01, format="%.6f", value=float(yastik_dict.get('ETH', 0)))
+        st.write("### ➕ Varlık Ekle / Çıkar")
+        with st.form("varlik_ekle_cikar_formu", clear_on_submit=True):
+            islem_varlik = st.selectbox("Hangi Varlık?", ["USD", "EUR", "GA", "BTC", "ETH"])
+            islem_tipi = st.radio("İşlem Tipi", ["Ekle (+)", "Çıkar (-)"], horizontal=True)
+            islem_miktari = st.number_input("Miktar (Örn: 2 gram, 100 dolar)", min_value=0.0, step=1.0, format="%.6f")
             
-            if st.form_submit_button("Cüzdanı Kaydet"):
-                def safe_update_yastik(varlik, miktar):
+            if st.form_submit_button("İşlemi Kaydet"):
+                if islem_miktari > 0:
+                    mevcut_miktar = float(yastik_dict.get(islem_varlik, 0))
+                    
+                    if "Ekle" in islem_tipi:
+                        yeni_miktar = mevcut_miktar + islem_miktari
+                        st.success(f"✅ {islem_varlik} cüzdanına eklendi! Yeni Toplam: {yeni_miktar:,.2f}")
+                    else:
+                        yeni_miktar = max(0.0, mevcut_miktar - islem_miktari)
+                        st.success(f"✅ {islem_varlik} cüzdanından çıkarıldı! Yeni Toplam: {yeni_miktar:,.2f}")
+                    
                     try:
-                        row_idx = int(df_yastik[df_yastik['varlik_tipi'] == varlik].index[0] + 2)
-                        ws_yastik.update_cell(row_idx, 2, miktar)
+                        row_idx = int(df_yastik[df_yastik['varlik_tipi'] == islem_varlik].index[0] + 2)
+                        ws_yastik.update_cell(row_idx, 2, yeni_miktar)
                     except:
-                        ws_yastik.append_row([varlik, miktar])
+                        ws_yastik.append_row([islem_varlik, yeni_miktar])
+                        
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+                else:
+                    st.error("Lütfen sıfırdan büyük bir miktar gir.")
+                    
+        st.write("---")
+        with st.expander("✏️ Toplam Tutarı Elle Düzelt (Eski Sistem)"):
+            with st.form("yastik_form"):
+                yeni_usd = st.number_input("Dolar (USD)", min_value=0.0, step=10.0, value=float(yastik_dict.get('USD', 0)))
+                yeni_eur = st.number_input("Euro (EUR)", min_value=0.0, step=10.0, value=float(yastik_dict.get('EUR', 0)))
+                yeni_ga = st.number_input("Gram Altın (GA)", min_value=0.0, step=0.5, value=float(yastik_dict.get('GA', 0)))
+                yeni_btc = st.number_input("Bitcoin (BTC)", min_value=0.0, step=0.001, format="%.6f", value=float(yastik_dict.get('BTC', 0)))
+                yeni_eth = st.number_input("Ethereum (ETH)", min_value=0.0, step=0.01, format="%.6f", value=float(yastik_dict.get('ETH', 0)))
                 
-                safe_update_yastik('USD', yeni_usd)
-                safe_update_yastik('EUR', yeni_eur)
-                safe_update_yastik('GA', yeni_ga)
-                safe_update_yastik('BTC', yeni_btc)
-                safe_update_yastik('ETH', yeni_eth)
-                st.success("✅ Tüm varlıklar güncellendi!")
-                time.sleep(1)
-                clear_cache_and_rerun()
-                
+                if st.form_submit_button("Cüzdanı Komple Güncelle"):
+                    def safe_update_yastik(varlik, miktar):
+                        try:
+                            row_idx = int(df_yastik[df_yastik['varlik_tipi'] == varlik].index[0] + 2)
+                            ws_yastik.update_cell(row_idx, 2, miktar)
+                        except:
+                            ws_yastik.append_row([varlik, miktar])
+                    
+                    safe_update_yastik('USD', yeni_usd)
+                    safe_update_yastik('EUR', yeni_eur)
+                    safe_update_yastik('GA', yeni_ga)
+                    safe_update_yastik('BTC', yeni_btc)
+                    safe_update_yastik('ETH', yeni_eth)
+                    st.success("✅ Tüm varlıklar manuel olarak güncellendi!")
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+                    
     with y_kol2:
+        st.write("### 📊 Cüzdan Dağılımı")
         st.info(f"💵 **{float(yastik_dict.get('USD', 0)):.2f} USD** = {yastik_usd_tl:,.2f} TL")
         st.info(f"💶 **{float(yastik_dict.get('EUR', 0)):.2f} EUR** = {yastik_eur_tl:,.2f} TL")
         st.warning(f"🥇 **{float(yastik_dict.get('GA', 0)):.2f} Altın** = {yastik_ga_tl:,.2f} TL")
