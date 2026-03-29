@@ -44,7 +44,7 @@ def get_df(sheet_name):
         "manuel_borclar": ["id", "borc_adi", "toplam_miktar", "odenen", "tarih"],
         "abonelikler": ["id", "isim", "tutar", "odeme_gunu"],
         "butceler": ["id", "kategori", "limit_tutar"],
-        "faturalar": ["id", "isim", "durum"] # YENİ CHECKLIST TABLOSU
+        "faturalar": ["id", "isim", "durum"]
     }
     
     tum_hucreler = worksheet.get_all_values()
@@ -260,14 +260,12 @@ with sekme_ana:
     kol_ana1, kol_ana2 = st.columns([1, 1])
     
     with kol_ana1:
-        # YENİ ÖZELLİK: CHECKLIST (FATURA/GÖREV TAKİBİ)
         st.subheader("🧾 Aylık Sabit Görev / Fatura Checklist'i")
         if not df_faturalar.empty:
             for _, row in df_faturalar.iterrows():
                 f_id = row['id']
                 eski_durum = str(row['durum']).lower() == 'true'
                 
-                # Checkbox mantığı
                 isim_gosterim = f"~~{row['isim']}~~" if eski_durum else f"{row['isim']}"
                 yeni_durum = st.checkbox(isim_gosterim, value=eski_durum, key=f"fat_chk_{f_id}")
                 
@@ -299,7 +297,7 @@ with sekme_ana:
 
     st.divider()
     
-    # YENİ ÖZELLİK: 50/30/20 ALTIN KURAL
+    # 50/30/20 UI DÜZELTİLDİ (PROGRESS BAR'LAR KUTULARIN İÇİNE ALINDI)
     st.subheader("⚖️ 50/30/20 Altın Bütçe Kuralı (Bu Ay)")
     if bu_ay_toplam_gelir > 0:
         iht_tutar = df_bu_ay_giderler[df_bu_ay_giderler['ihtiyac_mi'] == 'İhtiyaç']['miktar'].sum() if not df_bu_ay_giderler.empty else 0.0
@@ -311,20 +309,21 @@ with sekme_ana:
         t_yuzde = (kalan_tasarruf / bu_ay_toplam_gelir) * 100 if kalan_tasarruf > 0 else 0
         
         c50, c30, c20 = st.columns(3)
-        c50.info(f"**🛠️ İhtiyaç (Hedef: Maks %50)**\n\nGerçekleşen: **%{i_yuzde:.1f}** ({iht_tutar:,.0f} TL)")
-        st.progress(min(i_yuzde/100, 1.0))
-        
-        c30.warning(f"**🎮 İstek (Hedef: Maks %30)**\n\nGerçekleşen: **%{k_yuzde:.1f}** ({ist_tutar:,.0f} TL)")
-        st.progress(min(k_yuzde/100, 1.0))
-        
-        c20.success(f"**💰 Kurtarılan / Tasarruf (Hedef: Min %20)**\n\nGerçekleşen: **%{t_yuzde:.1f}** ({kalan_tasarruf:,.0f} TL)")
-        if kalan_tasarruf > 0: st.progress(min(t_yuzde/100, 1.0))
+        with c50:
+            st.info(f"**🛠️ İhtiyaç (Hedef: Maks %50)**\n\nGerçekleşen: **%{i_yuzde:.1f}** ({iht_tutar:,.0f} TL)")
+            st.progress(min(i_yuzde/100, 1.0))
+        with c30:
+            st.warning(f"**🎮 İstek (Hedef: Maks %30)**\n\nGerçekleşen: **%{k_yuzde:.1f}** ({ist_tutar:,.0f} TL)")
+            st.progress(min(k_yuzde/100, 1.0))
+        with c20:
+            st.success(f"**💰 Kurtarılan / Tasarruf (Hedef: Min %20)**\n\nGerçekleşen: **%{t_yuzde:.1f}** ({kalan_tasarruf:,.0f} TL)")
+            if kalan_tasarruf > 0: 
+                st.progress(min(t_yuzde/100, 1.0))
     else:
         st.info("Bu aya ait gelir kaydı bulunamadığı için 50/30/20 kuralı hesaplanamıyor. Lütfen 'Gelir' sekmesinden bu ayın gelirini ekleyin.")
 
     st.divider()
     
-    # YENİ ÖZELLİK: EXCEL İNDİRME BUTONU
     st.subheader("📥 Excel / CSV Dökümü Al")
     if not df_islemler.empty:
         csv_data = df_islemler.to_csv(index=False).encode('utf-8')
@@ -391,7 +390,6 @@ with sekme_harcama:
 
     st.divider()
     
-    # YENİ ÖZELLİK: GÖREV VE FATURA LİSTESİ YÖNETİMİ
     st.subheader("📌 Takip Edilecek Fatura / Sabit Görev Ekle")
     st.write("Ana sayfadaki checklist'te görünmesi için faturanın adını yaz. Herhangi bir miktar düşmez, sadece hatırlatıcıdır.")
     
@@ -852,6 +850,18 @@ with sekme_danisman:
 
     st.divider()
     st.subheader("💡 Yapay Zeka Finansal Analizlerin (PRO Sürüm)")
+    
+    # HATA VEREN DEĞİŞKENLERİ GÜVENLİ BİR ŞEKİLDE DANIŞMAN İÇİNDE HESAPLIYORUZ
+    d_usd_tl = varlik_tipleri.get('USD', 0) * st.session_state.usd_try
+    d_eur_tl = varlik_tipleri.get('EUR', 0) * st.session_state.eur_try
+    d_ga_tl = (varlik_tipleri.get('GA', 0) * st.session_state.gr_altin) + \
+                   (varlik_tipleri.get('Çeyrek Altın', 0) * (st.session_state.gr_altin * 1.605)) + \
+                   (varlik_tipleri.get('Yarım Altın', 0) * (st.session_state.gr_altin * 3.21)) + \
+                   (varlik_tipleri.get('Tam Altın', 0) * (st.session_state.gr_altin * 6.42)) + \
+                   (varlik_tipleri.get('Ata Altın', 0) * (st.session_state.gr_altin * 6.61))
+    d_btc_tl = varlik_tipleri.get('BTC', 0) * st.session_state.btc_try
+    d_eth_tl = varlik_tipleri.get('ETH', 0) * st.session_state.eth_try
+    toplam_likit = net_nakit + d_usd_tl + d_eur_tl + d_ga_tl
 
     if gercek_net_varlik > 0: st.success(f"🌟 **Zenginlik Yolculuğu:** Toplam net varlığın pozitif ({gercek_net_varlik:,.2f} TL). Yönün yukarı, böyle devam kanka!")
     elif gercek_net_varlik < 0: st.error(f"⚠️ **Borç Batağı Uyarısı:** Tüm varlıklarını satsan bile net varlığın ekside ({gercek_net_varlik:,.2f} TL). Yeni harcamaları kesip borç kapatmaya odaklanmalısın.")
@@ -885,15 +895,14 @@ with sekme_danisman:
             en_cok_tutar = df_gider_analiz.groupby('kategori')['miktar'].sum().max()
             st.error(f"🩸 **Kara Delik:** Paran en çok **{en_cok_harcanan}** kategorisinde eriyor ({en_cok_tutar:,.2f} TL). Oraya acil bir bütçe sınırı koymalısın.")
 
-    toplam_likit = net_nakit + yastik_usd_tl + yastik_eur_tl + yastik_ga_tl
     if toplam_tum_giderler > 0:
         kac_aylik_fon = toplam_likit / (toplam_tum_giderler if toplam_tum_giderler > 0 else 1)
         if kac_aylik_fon >= 6: st.success(f"🛡️ **Sırtı Yere Gelmez:** Tüm gelirlerin kesilse bile seni {kac_aylik_fon:.1f} ay idare edecek nakit/altın fonun var. Çok güvenli!")
         elif 1 <= kac_aylik_fon < 6: st.info(f"☂️ **Yağmurluk Hazır:** {kac_aylik_fon:.1f} aylık acil durum fonun var. Hedefin bunu 6 aya çıkarmak olsun.")
         elif kac_aylik_fon < 1 and toplam_tum_giderler > 0: st.warning("☔ **Savunmasızsın:** Acil bir durumda elindeki likit varlıklar 1 aylık giderini bile karşılamıyor. Acil durum fonu oluşturmaya başla!")
 
-    if yastik_btc_tl + yastik_eth_tl > 10000: st.success(f"🐋 **Kripto Balinası:** Cüzdan sağlam şişmiş kanka ({yastik_btc_tl + yastik_eth_tl:,.2f} TL).")
-    if yastik_ga_tl > 10000: st.warning(f"🥇 **Güvenli Liman Ustası:** Yastık altı altınlarla parlıyor ({yastik_ga_tl:,.2f} TL).")
+    if d_btc_tl + d_eth_tl > 10000: st.success(f"🐋 **Kripto Balinası:** Cüzdan sağlam şişmiş kanka ({d_btc_tl + d_eth_tl:,.2f} TL).")
+    if d_ga_tl > 10000: st.warning(f"🥇 **Güvenli Liman Ustası:** Yastık altı altınlarla parlıyor ({d_ga_tl:,.2f} TL).")
 
     if not df_ticaret.empty:
         beklenen_kar = (pd.to_numeric(df_ticaret['tahmini_satis']) - pd.to_numeric(df_ticaret['alis_fiyati'])).sum()
