@@ -345,7 +345,6 @@ with sekme_ana:
                 
                 if yeni_durum != eski_durum:
                     try:
-                        # TİP KORUMALI SATIR BULMA
                         row_idx = int(df_faturalar[df_faturalar['id'].astype(str) == str(f_id)].index[0] + 2)
                         ws_faturalar.update_cell(row_idx, 3, str(yeni_durum))
                         islem_tamamla(["faturalar"])
@@ -883,10 +882,16 @@ with sekme_butce:
                 orani = min(harcanan / limit, 1.0)
                 
                 with st.container(border=True):
-                    c1, c2 = st.columns([3,1])
+                    c1, c2, c3 = st.columns([5, 2, 1])
                     c1.markdown(f"**📁 {kat}**")
                     c2.write(f"{harcanan:,.0f} / {limit:,.0f} TL")
                     
+                    with c3:
+                        if st.button("🗑️ İptal", key=f"sil_butce_{row['id']}"):
+                            row_idx = int(df_butceler[df_butceler['id'].astype(str) == str(row['id'])].index[0] + 2)
+                            ws_butceler.update_cell(row_idx, 3, 0)
+                            islem_tamamla(["butceler"])
+
                     if orani > 0.8:
                         st.error(f"🚨 Tehlike! Bütçenin %{orani*100:.1f}'ini tükettin!")
                         st.progress(orani)
