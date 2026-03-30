@@ -40,14 +40,9 @@ def get_gsheet_client():
     return gspread.authorize(creds)
 
 @st.cache_resource
-def get_worksheet(sheet_name):
+def get_spreadsheet():
     client = get_gsheet_client()
-    sh = client.open_by_url(st.secrets["gsheets"]["url"])
-    try:
-        ws = sh.worksheet(sheet_name)
-    except:
-        ws = sh.add_worksheet(title=sheet_name, rows="100", cols="20")
-    return ws
+    return client.open_by_url(st.secrets["gsheets"]["url"])
 
 def clean_numeric(df, sheet_name):
     numeric_cols = {
@@ -80,7 +75,6 @@ def safe_float(val):
         return 0.0
 
 def update_ram(sheet_name):
-    time.sleep(0.5) # YENİ: Google'ı yormamak için küçük bekleme
     ws = st.session_state[f"ws_{sheet_name}"]
     try:
         data = ws.get_all_records()
@@ -139,53 +133,65 @@ with st.sidebar:
 
 st.title("💸 CebimX:Kişisel Finans Yönetimi")
 
-# --- 5. İLK GİRİŞTE RAM YÜKLEMESİ (GÜVENLİ VE LİMİTE TAKILMAYAN VERSİYON) ---
+# --- 5. İLK GİRİŞTE YÜKSEK HIZLI RAM YÜKLEMESİ (API OPTİMİZASYONLU) ---
 if "ram_loaded" not in st.session_state:
-    with st.spinner("Sistem Motoru RAM'e Yükleniyor (Sadece ilk girişte 5-10 saniye sürer)..."):
-        for s_name in COLS_DEF.keys():
-            ws = get_worksheet(s_name)
-            st.session_state[f"ws_{s_name}"] = ws
+    with st.spinner("Motor RAM'e Yükleniyor (Veriler Optimize Ediliyor)..."):
+        sh = get_spreadsheet()
+        
+        try:
+            # 10 İstek Yerine Sadece 1 İstek Atıyoruz
+            mevcut_sayfalar = {ws.title: ws for ws in sh.worksheets()}
+        except Exception as e:
+            st.error("Google'ın günlük güvenlik limitine takıldı. Lütfen 1 dakika bekleyip sayfayı yenile kanka.")
+            st.stop()
             
-            time.sleep(0.5) # YENİ: Google'ı DDoS saldırısı sanmaktan kurtaran altın saniye
+        for s_name, cols in COLS_DEF.items():
+            if s_name not in mevcut_sayfalar:
+                ws = sh.add_worksheet(title=s_name, rows="100", cols="20")
+                ws.append_row(cols)
+                st.session_state[f"ws_{s_name}"] = ws
+            else:
+                st.session_state[f"ws_{s_name}"] = mevcut_sayfalar[s_name]
             
+            ws = st.session_state[f"ws_{s_name}"]
             try:
                 data = ws.get_all_records()
                 df = pd.DataFrame(data)
-                
-                # Başlıklar eksikse onar
                 if not df.empty and 'id' not in df.columns and s_name != 'yastik_alti':
-                    ws.insert_row(COLS_DEF[s_name], index=1)
-                    time.sleep(0.5)
+                    ws.insert_row(cols, index=1)
                     data = ws.get_all_records()
                     df = pd.DataFrame(data)
-                    
-            except Exception as e: # Sayfa tamamen boşsa
-                ws.append_row(COLS_DEF[s_name])
-                time.sleep(0.5)
-                df = pd.DataFrame(columns=COLS_DEF[s_name])
+            except:
+                try: ws.append_row(cols)
+                except: pass
+                df = pd.DataFrame(columns=cols)
             
             df = clean_numeric(df, s_name)
             st.session_state[f"df_{s_name}"] = df
         
-        # Özel Sayfa Kurulumları
+        # Temel kurulumlar
         if st.session_state["df_yastik_alti"].empty:
             ws_y = st.session_state["ws_yastik_alti"]
-            ws_y.append_row(['Genel Kasa - USD', 0])
-            ws_y.append_row(['Genel Kasa - EUR', 0])
-            ws_y.append_row(['Genel Kasa - GA', 0])
-            ws_y.append_row(['Genel Kasa - BTC', 0])
-            ws_y.append_row(['Genel Kasa - ETH', 0])
-            update_ram("yastik_alti")
-            
+            try:
+                ws_y.append_row(['Genel Kasa - USD', 0])
+                ws_y.append_row(['Genel Kasa - EUR', 0])
+                ws_y.append_row(['Genel Kasa - GA', 0])
+                ws_y.append_row(['Genel Kasa - BTC', 0])
+                ws_y.append_row(['Genel Kasa - ETH', 0])
+                st.session_state["df_yastik_alti"] = clean_numeric(pd.DataFrame(ws_y.get_all_records()), "yastik_alti")
+            except: pass
+
         if st.session_state["df_butceler"].empty:
             ws_b = st.session_state["ws_butceler"]
-            for i, kat in enumerate(kategoriler):
-                ws_b.append_row([i+1, kat, 0])
-            update_ram("butceler")
+            try:
+                for i, kat in enumerate(kategoriler):
+                    ws_b.append_row([i+1, kat, 0])
+                st.session_state["df_butceler"] = clean_numeric(pd.DataFrame(ws_b.get_all_records()), "butceler")
+            except: pass
             
         st.session_state["ram_loaded"] = True
 
-# RAM'DEN VERİLERİ ÇEKİYORUZ (HIZ FİŞEK GİBİ OLDU)
+# RAM'DEN VERİLERİ ÇEKİYORUZ
 df_islemler = st.session_state["df_islemler"]
 ws_islemler = st.session_state["ws_islemler"]
 df_ticaret = st.session_state["df_ticaret"]
