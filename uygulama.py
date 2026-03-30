@@ -47,7 +47,6 @@ def get_worksheet(sheet_name):
         ws = sh.worksheet(sheet_name)
     except:
         ws = sh.add_worksheet(title=sheet_name, rows="100", cols="20")
-        ws.append_row(COLS_DEF[sheet_name])
     return ws
 
 def clean_numeric(df, sheet_name):
@@ -81,9 +80,13 @@ def safe_float(val):
         return 0.0
 
 def update_ram(sheet_name):
+    time.sleep(0.5) # YENİ: Google'ı yormamak için küçük bekleme
     ws = st.session_state[f"ws_{sheet_name}"]
-    data = ws.get_all_records()
-    df = pd.DataFrame(data)
+    try:
+        data = ws.get_all_records()
+        df = pd.DataFrame(data)
+    except:
+        df = pd.DataFrame(columns=COLS_DEF[sheet_name])
     df = clean_numeric(df, sheet_name)
     st.session_state[f"df_{sheet_name}"] = df
 
@@ -130,29 +133,39 @@ with st.sidebar:
     if st.button("🚪 Çıkış Yap", use_container_width=True):
         st.session_state.giris_yapildi = False
         st.session_state.kullanici_tipi = None
-        # RAM'i de temizle çıkış yapınca
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
 
 st.title("💸 CebimX:Kişisel Finans Yönetimi")
 
-# --- 5. İLK GİRİŞTE RAM YÜKLEMESİ (BÜYÜK AMELİYAT BURASI) ---
+# --- 5. İLK GİRİŞTE RAM YÜKLEMESİ (GÜVENLİ VE LİMİTE TAKILMAYAN VERSİYON) ---
 if "ram_loaded" not in st.session_state:
-    with st.spinner("Sistem Motoru RAM'e Yükleniyor (Bu işlem 1 kere yapılır, lütfen bekleyin)..."):
+    with st.spinner("Sistem Motoru RAM'e Yükleniyor (Sadece ilk girişte 5-10 saniye sürer)..."):
         for s_name in COLS_DEF.keys():
             ws = get_worksheet(s_name)
             st.session_state[f"ws_{s_name}"] = ws
             
-            tum_hucreler = ws.get_all_values()
-            if not tum_hucreler:
-                ws.append_row(COLS_DEF[s_name])
-            else:
-                headers = tum_hucreler[0]
-                if s_name != 'yastik_alti' and 'id' not in headers:
-                    ws.insert_row(COLS_DEF[s_name], index=1)
+            time.sleep(0.5) # YENİ: Google'ı DDoS saldırısı sanmaktan kurtaran altın saniye
             
-            update_ram(s_name)
+            try:
+                data = ws.get_all_records()
+                df = pd.DataFrame(data)
+                
+                # Başlıklar eksikse onar
+                if not df.empty and 'id' not in df.columns and s_name != 'yastik_alti':
+                    ws.insert_row(COLS_DEF[s_name], index=1)
+                    time.sleep(0.5)
+                    data = ws.get_all_records()
+                    df = pd.DataFrame(data)
+                    
+            except Exception as e: # Sayfa tamamen boşsa
+                ws.append_row(COLS_DEF[s_name])
+                time.sleep(0.5)
+                df = pd.DataFrame(columns=COLS_DEF[s_name])
+            
+            df = clean_numeric(df, s_name)
+            st.session_state[f"df_{s_name}"] = df
         
         # Özel Sayfa Kurulumları
         if st.session_state["df_yastik_alti"].empty:
@@ -329,7 +342,7 @@ with sekme_ana:
                     try:
                         row_idx = int(df_faturalar[df_faturalar['id'] == f_id].index[0] + 2)
                         ws_faturalar.update_cell(row_idx, 3, str(yeni_durum))
-                        islem_tamamla(["faturalar"]) # API YERİNE RAM GÜNCELLER
+                        islem_tamamla(["faturalar"])
                     except:
                         st.error("Güncelleme hatası, sayfayı yenileyin.")
                     
