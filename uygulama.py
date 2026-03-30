@@ -75,6 +75,7 @@ def safe_float(val):
         return 0.0
 
 def update_ram(sheet_name):
+    time.sleep(0.5)
     ws = st.session_state[f"ws_{sheet_name}"]
     try:
         data = ws.get_all_records()
@@ -133,13 +134,12 @@ with st.sidebar:
 
 st.title("💸 CebimX:Kişisel Finans Yönetimi")
 
-# --- 5. İLK GİRİŞTE YÜKSEK HIZLI RAM YÜKLEMESİ (API OPTİMİZASYONLU) ---
+# --- 5. İLK GİRİŞTE YÜKSEK HIZLI RAM YÜKLEMESİ ---
 if "ram_loaded" not in st.session_state:
     with st.spinner("Motor RAM'e Yükleniyor (Veriler Optimize Ediliyor)..."):
         sh = get_spreadsheet()
         
         try:
-            # 10 İstek Yerine Sadece 1 İstek Atıyoruz
             mevcut_sayfalar = {ws.title: ws for ws in sh.worksheets()}
         except Exception as e:
             st.error("Google'ın günlük güvenlik limitine takıldı. Lütfen 1 dakika bekleyip sayfayı yenile kanka.")
@@ -169,7 +169,6 @@ if "ram_loaded" not in st.session_state:
             df = clean_numeric(df, s_name)
             st.session_state[f"df_{s_name}"] = df
         
-        # Temel kurulumlar
         if st.session_state["df_yastik_alti"].empty:
             ws_y = st.session_state["ws_yastik_alti"]
             try:
@@ -346,15 +345,16 @@ with sekme_ana:
                 
                 if yeni_durum != eski_durum:
                     try:
-                        row_idx = int(df_faturalar[df_faturalar['id'] == f_id].index[0] + 2)
+                        # TİP KORUMALI SATIR BULMA
+                        row_idx = int(df_faturalar[df_faturalar['id'].astype(str) == str(f_id)].index[0] + 2)
                         ws_faturalar.update_cell(row_idx, 3, str(yeni_durum))
                         islem_tamamla(["faturalar"])
-                    except:
-                        st.error("Güncelleme hatası, sayfayı yenileyin.")
+                    except Exception as e:
+                        st.error(f"Kanka teknik bir hata oluştu detay: {e}")
                     
             if st.button("🔄 Yeni Ay: Tüm Tikleri Temizle", use_container_width=True):
-                for idx in range(len(df_faturalar)):
-                    ws_faturalar.update_cell(idx + 2, 3, "False")
+                for i in range(len(df_faturalar)):
+                    ws_faturalar.update_cell(i + 2, 3, "False")
                 islem_tamamla(["faturalar"])
         else:
             st.info("📌 Checklist boş. 'Gider' sekmesinden ödenecek fatura veya görev ekleyebilirsin.")
@@ -454,7 +454,7 @@ with sekme_harcama:
                         aylik = h_miktar / t_ay
                         ws_taksitler.append_row([get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik, t_ay])
                     
-                    row_idx = int(df_kartlar[df_kartlar['id'] == secilen_kart_id].index[0] + 2)
+                    row_idx = int(df_kartlar[df_kartlar['id'].astype(str) == str(secilen_kart_id)].index[0] + 2)
                     yeni_borc = safe_float(df_kartlar.loc[row_idx-2, 'guncel_borc']) + h_miktar
                     ws_kartlar.update_cell(row_idx, 4, yeni_borc)
                     ws_islemler.append_row([get_new_id(df_islemler), tip_kayit, h_kategori, h_miktar, zaman, ihtiyac_durumu, h_kategori])
@@ -491,7 +491,7 @@ with sekme_harcama:
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"📝 {row['isim']}")
                 if c2.button("Listeden Sil", key=f"sil_fat_list_{idx}_{row['id']}"):
-                    row_idx = int(df_faturalar[df_faturalar['id'] == row['id']].index[0] + 2)
+                    row_idx = int(df_faturalar[df_faturalar['id'].astype(str) == str(row['id'])].index[0] + 2)
                     ws_faturalar.delete_rows(row_idx)
                     islem_tamamla(["faturalar"])
 
@@ -532,10 +532,10 @@ with sekme_takvim:
                 kol3.write(f"Kalan: {int(row['kalan_ay'])} Ay ({safe_float(row['aylik_tutar']) * int(row['kalan_ay']):,.2f} TL)")
                 if kol4.button("🗑️", key=f"sil_taksit_{row['id_t']}"):
                     dusulecek_tutar = safe_float(row['aylik_tutar']) * int(row['kalan_ay'])
-                    kart_row_idx = int(df_kartlar[df_kartlar['id'] == row['kart_id']].index[0] + 2)
+                    kart_row_idx = int(df_kartlar[df_kartlar['id'].astype(str) == str(row['kart_id'])].index[0] + 2)
                     yeni_borc = max(0, safe_float(df_kartlar.loc[kart_row_idx-2, 'guncel_borc']) - dusulecek_tutar)
                     ws_kartlar.update_cell(kart_row_idx, 4, yeni_borc)
-                    taksit_row_idx = int(df_taksitler[df_taksitler['id'] == row['id_t']].index[0] + 2)
+                    taksit_row_idx = int(df_taksitler[df_taksitler['id'].astype(str) == str(row['id_t'])].index[0] + 2)
                     ws_taksitler.delete_rows(taksit_row_idx)
                     islem_tamamla(["kredi_kartlari", "taksitler"])
                 st.markdown("---")
@@ -634,10 +634,10 @@ with sekme_kart:
                 kol_k3.write(f"Borç: {safe_float(row['guncel_borc']):,.0f}")
                 kol_k4.write(f"Kesim: {row['hesap_kesim']}")
                 if kol_k5.button("🗑️", key=f"sil_kart_{k_id}"):
-                    kart_row_idx = int(df_kartlar[df_kartlar['id'] == k_id].index[0] + 2)
+                    kart_row_idx = int(df_kartlar[df_kartlar['id'].astype(str) == str(k_id)].index[0] + 2)
                     ws_kartlar.delete_rows(kart_row_idx)
                     if not df_taksitler.empty:
-                        taksit_indices = df_taksitler[df_taksitler['kart_id'] == k_id].index.tolist()
+                        taksit_indices = df_taksitler[df_taksitler['kart_id'].astype(str) == str(k_id)].index.tolist()
                         for idx in sorted(taksit_indices, reverse=True):
                             ws_taksitler.delete_rows(int(idx + 2))
                     islem_tamamla(["kredi_kartlari", "taksitler"])
@@ -673,7 +673,7 @@ with sekme_gecmis:
             kol5.write(f"**{safe_float(row['miktar']):,.2f} TL**")
             
             if kol6.button("🗑️", key=f"sil_islem_{i_id}"):
-                row_idx = int(df_islemler[df_islemler['id'] == i_id].index[0] + 2)
+                row_idx = int(df_islemler[df_islemler['id'].astype(str) == str(i_id)].index[0] + 2)
                 ws_islemler.delete_rows(row_idx)
                 islem_tamamla(["islemler"])
             st.markdown("---")
@@ -717,7 +717,7 @@ with sekme_tuccar:
                         
                         if c1.button("✅ Satışı Onayla", key=f"sat_btn_{t_id}"):
                             if sat_fiyati > 0:
-                                row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
+                                row_idx = int(df_ticaret[df_ticaret['id'].astype(str) == str(t_id)].index[0] + 2)
                                 ws_ticaret.update_cell(row_idx, 4, sat_fiyati)
                                 zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
                                 ws_islemler.append_row([get_new_id(df_islemler), "Gelir", f"Mal Satışı: {row['urun_adi']}", sat_fiyati, zaman, "Gelir", "Donanım (Al-Sat)"])
@@ -728,7 +728,7 @@ with sekme_tuccar:
                                 st.error("Lütfen satış fiyatı girin!")
                                 
                         if c2.button("🗑️ Sil", key=f"sil_env_{t_id}"):
-                            row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
+                            row_idx = int(df_ticaret[df_ticaret['id'].astype(str) == str(t_id)].index[0] + 2)
                             ws_ticaret.delete_rows(row_idx)
                             islem_tamamla(["ticaret"])
                             
@@ -747,7 +747,7 @@ with sekme_tuccar:
                     if t_kar >= 0: c3.success(f"+{t_kar:,.0f} TL")
                     else: c3.error(f"{t_kar:,.0f} TL")
                     if c4.button("🗑️", key=f"sil_satilan_{t_id}"):
-                        row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
+                        row_idx = int(df_ticaret[df_ticaret['id'].astype(str) == str(t_id)].index[0] + 2)
                         ws_ticaret.delete_rows(row_idx)
                         islem_tamamla(["ticaret"])
                     st.markdown("---")
@@ -775,7 +775,7 @@ with sekme_hedef:
                     st.progress(tamamlama_orani)
                 with kol_sil:
                     if st.button("🗑️", key=f"sil_hedef_top_{h_id}"):
-                        row_idx = int(df_hedefler[df_hedefler['id'] == h_id].index[0] + 2)
+                        row_idx = int(df_hedefler[df_hedefler['id'].astype(str) == str(h_id)].index[0] + 2)
                         ws_hedefler.delete_rows(row_idx)
                         islem_tamamla(["hedefler"])
             st.markdown(" ")
@@ -802,7 +802,7 @@ with sekme_hedef:
             
             if st.button("Parayı Ekle"):
                 if eklenecek_tutar > 0:
-                    row_idx = int(df_hedefler[df_hedefler['hedef_adi'] == secilen_hedef].index[0] + 2)
+                    row_idx = int(df_hedefler[df_hedefler['hedef_adi'].astype(str) == str(secilen_hedef)].index[0] + 2)
                     mevcut_biriken = safe_float(df_hedefler.loc[row_idx-2, 'biriken'])
                     ws_hedefler.update_cell(row_idx, 4, mevcut_biriken + eklenecek_tutar)
                     
@@ -843,7 +843,7 @@ with sekme_abonelik:
             kol2.write(f"{safe_float(row['tutar']):,.2f} TL")
             kol3.write(f"Her Ayın {row['odeme_gunu']}. Günü")
             if kol4.button("🗑️", key=f"sil_ab_{row['id']}"):
-                row_idx = int(df_abonelikler[df_abonelikler['id'] == row['id']].index[0] + 2)
+                row_idx = int(df_abonelikler[df_abonelikler['id'].astype(str) == str(row['id'])].index[0] + 2)
                 ws_abonelikler.delete_rows(row_idx)
                 islem_tamamla(["abonelikler"])
 
@@ -859,7 +859,7 @@ with sekme_butce:
         if st.form_submit_button("Limiti Güncelle"):
             if b_limit >= 0:
                 try:
-                    row_idx = int(df_butceler[df_butceler['kategori'] == b_kategori].index[0] + 2)
+                    row_idx = int(df_butceler[df_butceler['kategori'].astype(str) == str(b_kategori)].index[0] + 2)
                     ws_butceler.update_cell(row_idx, 3, b_limit)
                 except:
                     ws_butceler.append_row([get_new_id(df_butceler), b_kategori, b_limit])
@@ -876,7 +876,7 @@ with sekme_butce:
             if limit > 0:
                 harcanan = 0.0
                 if not df_bu_ay_giderler.empty:
-                    df_kat_harcama = df_bu_ay_giderler[df_bu_ay_giderler['kategori'] == kat]
+                    df_kat_harcama = df_bu_ay_giderler[df_bu_ay_giderler['kategori'].astype(str) == str(kat)]
                     if not df_kat_harcama.empty:
                         harcanan = df_kat_harcama['miktar'].sum()
                 
@@ -1005,7 +1005,7 @@ with sekme_borclar:
                 
                 if st.form_submit_button("Kartı Güncelle"):
                     if islem_tutari > 0:
-                        row_idx = int(df_kartlar[df_kartlar['kart_adi'] == secilen_kart_adi].index[0] + 2)
+                        row_idx = int(df_kartlar[df_kartlar['kart_adi'].astype(str) == str(secilen_kart_adi)].index[0] + 2)
                         mevcut_borc = safe_float(df_kartlar.loc[row_idx-2, 'guncel_borc'])
                         
                         if "Ekle" in islem_tipi:
@@ -1065,7 +1065,7 @@ with sekme_borclar:
             odeme_tutari = st.number_input("Ödenen Miktarı Güncelle (TL)", min_value=0.0, step=50.0)
             
             if st.button("Ödemeyi Kaydet"):
-                row_idx = int(df_borclar[df_borclar['borc_adi'] == secilen].index[0] + 2)
+                row_idx = int(df_borclar[df_borclar['borc_adi'].astype(str) == str(secilen)].index[0] + 2)
                 mevcut_odenen = safe_float(df_borclar.loc[row_idx-2, 'odenen'])
                 ws_borclar.update_cell(row_idx, 4, mevcut_odenen + odeme_tutari)
                 islem_tamamla(["manuel_borclar"])
@@ -1073,6 +1073,6 @@ with sekme_borclar:
         with col2:
             st.write("Tehlikeli Bölge")
             if st.button("Seçili Borcu Tamamen Sil", type="primary"):
-                row_idx = int(df_borclar[df_borclar['borc_adi'] == secilen].index[0] + 2)
+                row_idx = int(df_borclar[df_borclar['borc_adi'].astype(str) == str(secilen)].index[0] + 2)
                 ws_borclar.delete_rows(row_idx)
                 islem_tamamla(["manuel_borclar"])
