@@ -16,7 +16,22 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GOOGLE SHEETS BAĞLANTI & AKILLI HAFIZA MOTORU ---
+kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer"]
+
+COLS_DEF = {
+    "islemler": ["id", "tip", "isim", "miktar", "tarih", "ihtiyac_mi", "kategori"],
+    "ticaret": ["id", "urun_adi", "alis_fiyati", "tahmini_satis"],
+    "hedefler": ["id", "hedef_adi", "hedef_tutar", "biriken"],
+    "kredi_kartlari": ["id", "kart_adi", "kart_limit", "guncel_borc", "hesap_kesim"],
+    "taksitler": ["id", "kart_id", "aciklama", "aylik_tutar", "kalan_ay"],
+    "yastik_alti": ["varlik_tipi", "miktar"],
+    "manuel_borclar": ["id", "borc_adi", "toplam_miktar", "odenen", "tarih"],
+    "abonelikler": ["id", "isim", "tutar", "odeme_gunu"],
+    "butceler": ["id", "kategori", "limit_tutar"],
+    "faturalar": ["id", "isim", "durum"]
+}
+
+# --- 2. YENİ NESİL AKILLI RAM & GOOGLE SHEETS MOTORU ---
 @st.cache_resource
 def get_gsheet_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -24,57 +39,31 @@ def get_gsheet_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
 
-@st.cache_resource(ttl=600)
-def get_df(sheet_name):
+@st.cache_resource
+def get_worksheet(sheet_name):
     client = get_gsheet_client()
     sh = client.open_by_url(st.secrets["gsheets"]["url"])
-    
     try:
-        worksheet = sh.worksheet(sheet_name)
+        ws = sh.worksheet(sheet_name)
     except:
-        worksheet = sh.add_worksheet(title=sheet_name, rows="100", cols="20")
-        
-    cols = {
-        "islemler": ["id", "tip", "isim", "miktar", "tarih", "ihtiyac_mi", "kategori"],
-        "ticaret": ["id", "urun_adi", "alis_fiyati", "tahmini_satis"],
-        "hedefler": ["id", "hedef_adi", "hedef_tutar", "biriken"],
-        "kredi_kartlari": ["id", "kart_adi", "kart_limit", "guncel_borc", "hesap_kesim"],
-        "taksitler": ["id", "kart_id", "aciklama", "aylik_tutar", "kalan_ay"],
-        "yastik_alti": ["varlik_tipi", "miktar"],
-        "manuel_borclar": ["id", "borc_adi", "toplam_miktar", "odenen", "tarih"],
-        "abonelikler": ["id", "isim", "tutar", "odeme_gunu"],
-        "butceler": ["id", "kategori", "limit_tutar"],
-        "faturalar": ["id", "isim", "durum"]
+        ws = sh.add_worksheet(title=sheet_name, rows="100", cols="20")
+        ws.append_row(COLS_DEF[sheet_name])
+    return ws
+
+def clean_numeric(df, sheet_name):
+    numeric_cols = {
+        "islemler": ["miktar"],
+        "ticaret": ["alis_fiyati", "tahmini_satis"],
+        "hedefler": ["hedef_tutar", "biriken"],
+        "kredi_kartlari": ["kart_limit", "guncel_borc"],
+        "taksitler": ["aylik_tutar"],
+        "yastik_alti": ["miktar"],
+        "manuel_borclar": ["toplam_miktar", "odenen"],
+        "abonelikler": ["tutar"],
+        "butceler": ["limit_tutar"],
+        "faturalar": []
     }
-    
-    tum_hucreler = worksheet.get_all_values()
-    
-    if not tum_hucreler and sheet_name in cols:
-        worksheet.append_row(cols[sheet_name])
-        df = pd.DataFrame(columns=cols[sheet_name])
-    else:
-        try:
-            data = worksheet.get_all_records()
-            df = pd.DataFrame(data)
-            
-            if not df.empty and 'id' not in df.columns and sheet_name in cols:
-                worksheet.insert_row(cols[sheet_name], index=1)
-                data = worksheet.get_all_records()
-                df = pd.DataFrame(data)
-                
-        except:
-            df = pd.DataFrame(columns=cols.get(sheet_name, []))
-            
-    return df, worksheet
-
-def get_new_id(df):
-    return int(df['id'].max() + 1) if not df.empty and 'id' in df.columns else 1
-
-def clear_cache_and_rerun():
-    st.cache_resource.clear()
-    st.rerun()
-
-def clean_numeric(df, columns):
+    columns = numeric_cols.get(sheet_name, [])
     if not df.empty:
         for col in columns:
             if col in df.columns:
@@ -90,6 +79,21 @@ def safe_float(val):
         return float(val)
     except:
         return 0.0
+
+def update_ram(sheet_name):
+    ws = st.session_state[f"ws_{sheet_name}"]
+    data = ws.get_all_records()
+    df = pd.DataFrame(data)
+    df = clean_numeric(df, sheet_name)
+    st.session_state[f"df_{sheet_name}"] = df
+
+def islem_tamamla(sheets):
+    for s in sheets:
+        update_ram(s)
+    st.rerun()
+
+def get_new_id(df):
+    return int(df['id'].max() + 1) if not df.empty and 'id' in df.columns else 1
 
 # --- 3. GİRİŞ (LOGIN) SİSTEMİ ---
 if 'giris_yapildi' not in st.session_state:
@@ -126,51 +130,69 @@ with st.sidebar:
     if st.button("🚪 Çıkış Yap", use_container_width=True):
         st.session_state.giris_yapildi = False
         st.session_state.kullanici_tipi = None
+        # RAM'i de temizle çıkış yapınca
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         st.rerun()
 
 st.title("💸 CebimX:Kişisel Finans Yönetimi")
 
-# --- 5. VERİLERİ GOOGLE SHEETS'TEN ÇEK VE TEMİZLE ---
-try:
-    df_islemler, ws_islemler = get_df("islemler")
-    df_ticaret, ws_ticaret = get_df("ticaret")
-    df_hedefler, ws_hedefler = get_df("hedefler")
-    df_kartlar, ws_kartlar = get_df("kredi_kartlari")
-    df_taksitler, ws_taksitler = get_df("taksitler")
-    df_yastik, ws_yastik = get_df("yastik_alti")
-    df_borclar, ws_borclar = get_df("manuel_borclar")
-    df_abonelikler, ws_abonelikler = get_df("abonelikler")
-    df_butceler, ws_butceler = get_df("butceler")
-    df_faturalar, ws_faturalar = get_df("faturalar")
-    
-    df_islemler = clean_numeric(df_islemler, ['miktar'])
-    df_ticaret = clean_numeric(df_ticaret, ['alis_fiyati', 'tahmini_satis'])
-    df_hedefler = clean_numeric(df_hedefler, ['hedef_tutar', 'biriken'])
-    df_kartlar = clean_numeric(df_kartlar, ['kart_limit', 'guncel_borc'])
-    df_taksitler = clean_numeric(df_taksitler, ['aylik_tutar'])
-    df_yastik = clean_numeric(df_yastik, ['miktar'])
-    df_borclar = clean_numeric(df_borclar, ['toplam_miktar', 'odenen'])
-    df_abonelikler = clean_numeric(df_abonelikler, ['tutar'])
-    df_butceler = clean_numeric(df_butceler, ['limit_tutar'])
-    
-except Exception as e:
-    st.error(f"⚠️ Google Sheets'e bağlanırken hata oluştu. Hata: {e}")
-    st.stop()
+# --- 5. İLK GİRİŞTE RAM YÜKLEMESİ (BÜYÜK AMELİYAT BURASI) ---
+if "ram_loaded" not in st.session_state:
+    with st.spinner("Sistem Motoru RAM'e Yükleniyor (Bu işlem 1 kere yapılır, lütfen bekleyin)..."):
+        for s_name in COLS_DEF.keys():
+            ws = get_worksheet(s_name)
+            st.session_state[f"ws_{s_name}"] = ws
+            
+            tum_hucreler = ws.get_all_values()
+            if not tum_hucreler:
+                ws.append_row(COLS_DEF[s_name])
+            else:
+                headers = tum_hucreler[0]
+                if s_name != 'yastik_alti' and 'id' not in headers:
+                    ws.insert_row(COLS_DEF[s_name], index=1)
+            
+            update_ram(s_name)
+        
+        # Özel Sayfa Kurulumları
+        if st.session_state["df_yastik_alti"].empty:
+            ws_y = st.session_state["ws_yastik_alti"]
+            ws_y.append_row(['Genel Kasa - USD', 0])
+            ws_y.append_row(['Genel Kasa - EUR', 0])
+            ws_y.append_row(['Genel Kasa - GA', 0])
+            ws_y.append_row(['Genel Kasa - BTC', 0])
+            ws_y.append_row(['Genel Kasa - ETH', 0])
+            update_ram("yastik_alti")
+            
+        if st.session_state["df_butceler"].empty:
+            ws_b = st.session_state["ws_butceler"]
+            for i, kat in enumerate(kategoriler):
+                ws_b.append_row([i+1, kat, 0])
+            update_ram("butceler")
+            
+        st.session_state["ram_loaded"] = True
 
-if df_yastik.empty:
-    ws_yastik.append_row(['Genel Kasa - USD', 0])
-    ws_yastik.append_row(['Genel Kasa - EUR', 0])
-    ws_yastik.append_row(['Genel Kasa - GA', 0])
-    ws_yastik.append_row(['Genel Kasa - BTC', 0])
-    ws_yastik.append_row(['Genel Kasa - ETH', 0])
-    clear_cache_and_rerun()
-
-kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer"]
-
-if df_butceler.empty:
-    for i, kat in enumerate(kategoriler):
-        ws_butceler.append_row([i+1, kat, 0])
-    clear_cache_and_rerun()
+# RAM'DEN VERİLERİ ÇEKİYORUZ (HIZ FİŞEK GİBİ OLDU)
+df_islemler = st.session_state["df_islemler"]
+ws_islemler = st.session_state["ws_islemler"]
+df_ticaret = st.session_state["df_ticaret"]
+ws_ticaret = st.session_state["ws_ticaret"]
+df_hedefler = st.session_state["df_hedefler"]
+ws_hedefler = st.session_state["ws_hedefler"]
+df_kartlar = st.session_state["df_kredi_kartlari"]
+ws_kartlar = st.session_state["ws_kredi_kartlari"]
+df_taksitler = st.session_state["df_taksitler"]
+ws_taksitler = st.session_state["ws_taksitler"]
+df_yastik = st.session_state["df_yastik_alti"]
+ws_yastik = st.session_state["ws_yastik_alti"]
+df_borclar = st.session_state["df_manuel_borclar"]
+ws_borclar = st.session_state["ws_manuel_borclar"]
+df_abonelikler = st.session_state["df_abonelikler"]
+ws_abonelikler = st.session_state["ws_abonelikler"]
+df_butceler = st.session_state["df_butceler"]
+ws_butceler = st.session_state["ws_butceler"]
+df_faturalar = st.session_state["df_faturalar"]
+ws_faturalar = st.session_state["ws_faturalar"]
 
 # --- 6. CANLI PİYASALAR VE KRİPTO RADARI ---
 st.subheader("🌍 Canlı Piyasalar ve Kripto Radarı")
@@ -296,26 +318,25 @@ with sekme_ana:
     with kol_ana1:
         st.subheader("🧾 Aylık Sabit Görev / Fatura Checklist'i")
         if not df_faturalar.empty:
-            for idx, row in df_faturalar.iterrows(): # index eklendi (benzersiz kimlik için)
+            for idx, row in df_faturalar.iterrows():
                 f_id = row['id']
                 eski_durum = str(row['durum']).lower() == 'true'
                 
                 isim_gosterim = f"~~{row['isim']}~~" if eski_durum else f"{row['isim']}"
-                # YENİ: key parametresine idx (sıra numarası) eklenerek hatanın önüne geçildi!
                 yeni_durum = st.checkbox(isim_gosterim, value=eski_durum, key=f"fat_chk_{idx}_{f_id}")
                 
                 if yeni_durum != eski_durum:
                     try:
                         row_idx = int(df_faturalar[df_faturalar['id'] == f_id].index[0] + 2)
                         ws_faturalar.update_cell(row_idx, 3, str(yeni_durum))
-                        clear_cache_and_rerun()
+                        islem_tamamla(["faturalar"]) # API YERİNE RAM GÜNCELLER
                     except:
                         st.error("Güncelleme hatası, sayfayı yenileyin.")
                     
             if st.button("🔄 Yeni Ay: Tüm Tikleri Temizle", use_container_width=True):
                 for idx in range(len(df_faturalar)):
                     ws_faturalar.update_cell(idx + 2, 3, "False")
-                clear_cache_and_rerun()
+                islem_tamamla(["faturalar"])
         else:
             st.info("📌 Checklist boş. 'Gider' sekmesinden ödenecek fatura veya görev ekleyebilirsin.")
 
@@ -384,7 +405,7 @@ with sekme_gelir:
                 ws_islemler.append_row([get_new_id(df_islemler), "Gelir", islem_adi, islem_miktari, zaman, "Gelir", "Maaş/Gelir"])
                 st.success("✅ Gelir kaydedildi!")
                 time.sleep(1)
-                clear_cache_and_rerun()
+                islem_tamamla(["islemler"])
 
 # --- SEKME 3: GİDERLER (AKILLI HARCAMA & CHECKLIST YÖNETİMİ) ---
 with sekme_harcama:
@@ -417,13 +438,17 @@ with sekme_harcama:
                     row_idx = int(df_kartlar[df_kartlar['id'] == secilen_kart_id].index[0] + 2)
                     yeni_borc = safe_float(df_kartlar.loc[row_idx-2, 'guncel_borc']) + h_miktar
                     ws_kartlar.update_cell(row_idx, 4, yeni_borc)
+                    ws_islemler.append_row([get_new_id(df_islemler), tip_kayit, h_kategori, h_miktar, zaman, ihtiyac_durumu, h_kategori])
+                    
+                    st.success("✅ Harcama başarıyla işlendi!")
+                    time.sleep(1)
+                    islem_tamamla(["islemler", "kredi_kartlari", "taksitler"])
                 else:
                     tip_kayit = "Gider"
-                    
-                ws_islemler.append_row([get_new_id(df_islemler), tip_kayit, h_kategori, h_miktar, zaman, ihtiyac_durumu, h_kategori])
-                st.success("✅ Harcama başarıyla işlendi!")
-                time.sleep(1)
-                clear_cache_and_rerun()
+                    ws_islemler.append_row([get_new_id(df_islemler), tip_kayit, h_kategori, h_miktar, zaman, ihtiyac_durumu, h_kategori])
+                    st.success("✅ Harcama başarıyla işlendi!")
+                    time.sleep(1)
+                    islem_tamamla(["islemler"])
 
     st.divider()
     
@@ -437,20 +462,19 @@ with sekme_harcama:
                 ws_faturalar.append_row([get_new_id(df_faturalar), f_isim, "False"])
                 st.success("✅ Ana sayfadaki listeye eklendi!")
                 time.sleep(1)
-                clear_cache_and_rerun()
+                islem_tamamla(["faturalar"])
             else:
                 st.error("Lütfen bir isim girin.")
                 
     if not df_faturalar.empty:
         with st.expander("🗑️ Checklist'ten Görev / Fatura Sil"):
-            for idx, row in df_faturalar.iterrows(): # index eklendi (benzersiz kimlik için)
+            for idx, row in df_faturalar.iterrows():
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"📝 {row['isim']}")
-                # YENİ: key parametresine idx eklenerek hatanın önüne geçildi!
                 if c2.button("Listeden Sil", key=f"sil_fat_list_{idx}_{row['id']}"):
                     row_idx = int(df_faturalar[df_faturalar['id'] == row['id']].index[0] + 2)
                     ws_faturalar.delete_rows(row_idx)
-                    clear_cache_and_rerun()
+                    islem_tamamla(["faturalar"])
 
 # --- SEKME 4: TAKVİM ---
 with sekme_takvim:
@@ -494,7 +518,7 @@ with sekme_takvim:
                     ws_kartlar.update_cell(kart_row_idx, 4, yeni_borc)
                     taksit_row_idx = int(df_taksitler[df_taksitler['id'] == row['id_t']].index[0] + 2)
                     ws_taksitler.delete_rows(taksit_row_idx)
-                    clear_cache_and_rerun()
+                    islem_tamamla(["kredi_kartlari", "taksitler"])
                 st.markdown("---")
 
 # --- SEKME 5: YASTIK ALTI & KRİPTO ---
@@ -528,7 +552,7 @@ with sekme_yastik:
                     except:
                         ws_yastik.append_row([tam_isim, yeni_miktar])
                     time.sleep(1)
-                    clear_cache_and_rerun()
+                    islem_tamamla(["yastik_alti"])
                 else:
                     st.error("Lütfen sıfırdan büyük bir miktar gir.")
                     
@@ -539,7 +563,7 @@ with sekme_yastik:
             if st.button("Sıfırlanan (Miktarı 0 Olan) Varlıkları Listeden Sil"):
                 for idx in sorted(df_sifirlar.index.tolist(), reverse=True):
                     ws_yastik.delete_rows(int(idx + 2))
-                clear_cache_and_rerun()
+                islem_tamamla(["yastik_alti"])
         else:
             st.info("Listede sıfırlanmış boş varlık kaydı yok, her şey temiz.")
                     
@@ -576,7 +600,7 @@ with sekme_kart:
             if st.form_submit_button("Kartı Tanımla"):
                 if k_isim:
                     ws_kartlar.append_row([get_new_id(df_kartlar), k_isim, k_limit, 0.0, k_kesim])
-                    clear_cache_and_rerun()
+                    islem_tamamla(["kredi_kartlari"])
 
     with kk_kol2:
         if df_kartlar.empty:
@@ -597,7 +621,7 @@ with sekme_kart:
                         taksit_indices = df_taksitler[df_taksitler['kart_id'] == k_id].index.tolist()
                         for idx in sorted(taksit_indices, reverse=True):
                             ws_taksitler.delete_rows(int(idx + 2))
-                    clear_cache_and_rerun()
+                    islem_tamamla(["kredi_kartlari", "taksitler"])
                 st.markdown("---")
 
 # --- SEKME 7: GEÇMİŞ ---
@@ -632,7 +656,7 @@ with sekme_gecmis:
             if kol6.button("🗑️", key=f"sil_islem_{i_id}"):
                 row_idx = int(df_islemler[df_islemler['id'] == i_id].index[0] + 2)
                 ws_islemler.delete_rows(row_idx)
-                clear_cache_and_rerun()
+                islem_tamamla(["islemler"])
             st.markdown("---")
 
 # --- SEKME 8: TÜCCAR ---
@@ -650,7 +674,7 @@ with sekme_tuccar:
                 ws_islemler.append_row([get_new_id(df_islemler), "Gider", f"Mal Alışı: {urun}", alis, zaman, "İhtiyaç", "Donanım (Al-Sat)"])
                 st.success(f"📦 {urun} envantere eklendi ve maliyeti kasadan düşüldü!")
                 time.sleep(1)
-                clear_cache_and_rerun()
+                islem_tamamla(["ticaret", "islemler"])
             else:
                 st.error("Lütfen ürün adı ve maliyet tutarını girin.")
         
@@ -680,14 +704,14 @@ with sekme_tuccar:
                                 ws_islemler.append_row([get_new_id(df_islemler), "Gelir", f"Mal Satışı: {row['urun_adi']}", sat_fiyati, zaman, "Gelir", "Donanım (Al-Sat)"])
                                 st.success("✅ Satış gerçekleşti ve para kasaya eklendi!")
                                 time.sleep(1)
-                                clear_cache_and_rerun()
+                                islem_tamamla(["ticaret", "islemler"])
                             else:
                                 st.error("Lütfen satış fiyatı girin!")
                                 
                         if c2.button("🗑️ Sil", key=f"sil_env_{t_id}"):
                             row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
                             ws_ticaret.delete_rows(row_idx)
-                            clear_cache_and_rerun()
+                            islem_tamamla(["ticaret"])
                             
         with kol_sat:
             st.write("### 💸 Satılanlar ve Kâr Durumu")
@@ -706,7 +730,7 @@ with sekme_tuccar:
                     if c4.button("🗑️", key=f"sil_satilan_{t_id}"):
                         row_idx = int(df_ticaret[df_ticaret['id'] == t_id].index[0] + 2)
                         ws_ticaret.delete_rows(row_idx)
-                        clear_cache_and_rerun()
+                        islem_tamamla(["ticaret"])
                     st.markdown("---")
 
 # --- SEKME 9: HEDEFLER (MİNİMALİST) ---
@@ -734,7 +758,7 @@ with sekme_hedef:
                     if st.button("🗑️", key=f"sil_hedef_top_{h_id}"):
                         row_idx = int(df_hedefler[df_hedefler['id'] == h_id].index[0] + 2)
                         ws_hedefler.delete_rows(row_idx)
-                        clear_cache_and_rerun()
+                        islem_tamamla(["hedefler"])
             st.markdown(" ")
         st.divider()
 
@@ -747,7 +771,7 @@ with sekme_hedef:
         if st.form_submit_button("Hedef Oluştur"):
             if hedef_ad:
                 ws_hedefler.append_row([get_new_id(df_hedefler), hedef_ad, hedef_tutari, hedef_biriken])
-                clear_cache_and_rerun()
+                islem_tamamla(["hedefler"])
 
     if not df_hedefler.empty:
         st.divider()
@@ -768,11 +792,11 @@ with sekme_hedef:
                     
                     st.success(f"✅ {secilen_hedef} kumbarasına {eklenecek_tutar:,.2f} TL atıldı ve nakit bakiyenden düşüldü!")
                     time.sleep(1)
-                    clear_cache_and_rerun()
+                    islem_tamamla(["hedefler", "islemler"])
                 else:
                     st.error("Lütfen sıfırdan büyük bir tutar gir.")
 
-# --- YENİ SEKME 10: ABONELİKLER (VAMPİRLER) ---
+# --- SEKME 10: ABONELİKLER (VAMPİRLER) ---
 with sekme_abonelik:
     st.subheader("🧛‍♂️ Gizli Vampirler (Abonelikler)")
     st.write("Her ay senden sessizce para çeken aboneliklerini buraya ekle.")
@@ -787,7 +811,7 @@ with sekme_abonelik:
                 ws_abonelikler.append_row([get_new_id(df_abonelikler), a_isim, a_tutar, a_gun])
                 st.success(f"✅ {a_isim} sisteme eklendi!")
                 time.sleep(1)
-                clear_cache_and_rerun()
+                islem_tamamla(["abonelikler"])
 
     if not df_abonelikler.empty:
         st.divider()
@@ -802,9 +826,9 @@ with sekme_abonelik:
             if kol4.button("🗑️", key=f"sil_ab_{row['id']}"):
                 row_idx = int(df_abonelikler[df_abonelikler['id'] == row['id']].index[0] + 2)
                 ws_abonelikler.delete_rows(row_idx)
-                clear_cache_and_rerun()
+                islem_tamamla(["abonelikler"])
 
-# --- YENİ SEKME 11: BÜTÇE LİMİTLERİ (KIRMIZI ÇİZGİ) ---
+# --- SEKME 11: BÜTÇE LİMİTLERİ (KIRMIZI ÇİZGİ) ---
 with sekme_butce:
     st.subheader("🚧 Kırmızı Çizgi (Kategori Sınırları)")
     st.write("Kategorilere limit koy, kırmızıya yaklaştığında frene bas.")
@@ -822,7 +846,7 @@ with sekme_butce:
                     ws_butceler.append_row([get_new_id(df_butceler), b_kategori, b_limit])
                 st.success(f"✅ {b_kategori} limiti {b_limit} TL olarak ayarlandı!")
                 time.sleep(1)
-                clear_cache_and_rerun()
+                islem_tamamla(["butceler"])
 
     if not df_butceler.empty:
         st.divider()
@@ -977,7 +1001,7 @@ with sekme_borclar:
                         ws_kartlar.update_cell(row_idx, 4, yeni_borc)
                         st.success(mesaj)
                         time.sleep(1)
-                        clear_cache_and_rerun()
+                        islem_tamamla(["kredi_kartlari", "islemler"])
                     else:
                         st.error("Lütfen sıfırdan büyük bir tutar girin.")
                         
@@ -1003,7 +1027,7 @@ with sekme_borclar:
                     ws_borclar.append_row([get_new_id(df_borclar), b_adi, b_miktar, b_odenen, zaman])
                     st.success(f"✅ {b_adi} borcu kaydedildi!")
                     time.sleep(1)
-                    clear_cache_and_rerun()
+                    islem_tamamla(["manuel_borclar"])
                 else: 
                     st.error("Lütfen bir isim ve tutar gir!")
 
@@ -1025,11 +1049,11 @@ with sekme_borclar:
                 row_idx = int(df_borclar[df_borclar['borc_adi'] == secilen].index[0] + 2)
                 mevcut_odenen = safe_float(df_borclar.loc[row_idx-2, 'odenen'])
                 ws_borclar.update_cell(row_idx, 4, mevcut_odenen + odeme_tutari)
-                clear_cache_and_rerun()
+                islem_tamamla(["manuel_borclar"])
                 
         with col2:
             st.write("Tehlikeli Bölge")
             if st.button("Seçili Borcu Tamamen Sil", type="primary"):
                 row_idx = int(df_borclar[df_borclar['borc_adi'] == secilen].index[0] + 2)
                 ws_borclar.delete_rows(row_idx)
-                clear_cache_and_rerun()
+                islem_tamamla(["manuel_borclar"])
