@@ -16,7 +16,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GOOGLE SHEETS BAĞLANTI & AKILLI RAM MOTORU (V12.1 KESİN ÇÖZÜM) ---
+# --- 2. GOOGLE SHEETS BAĞLANTI & AKILLI RAM MOTORU ---
 class DirtyTrackerWS:
     def __init__(self, ws, sheet_name):
         self.ws = ws
@@ -1040,8 +1040,7 @@ with sekmeler[14]:
             with st.form("kk_borc_formu"):
                 kart_isimleri = df_kartlar['kart_adi'].tolist()
                 secilen_kart_adi = st.selectbox("İşlem Yapılacak Kart", kart_isimleri)
-                # YENİ ASGARİ ÖDEME SEÇENEĞİ EKLENDİ
-                islem_tipi = st.radio("İşlem Tipi", ["Borç Ekle (Geçmiş Harcama)", "Borç Öde (Ekstre Ödemesi)", "Asgari Ödeme Yap"], horizontal=True)
+                islem_tipi = st.radio("İşlem Tipi", ["Borç Ekle (Geçmiş Harcama)", "Borç Öde (Ekstre Ödemesi)", "Asgari Ödeme Yap", "Yanlış Ekledim (Geri Al)"], horizontal=True)
                 islem_tutari = st.number_input("Tutar (TL)", min_value=0.0, step=100.0)
                 
                 if st.form_submit_button("Kartı Güncelle"):
@@ -1052,10 +1051,12 @@ with sekmeler[14]:
                         if "Ekle" in islem_tipi:
                             yeni_borc = mevcut_borc + islem_tutari
                             mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL borç eklendi!"
+                        elif "Yanlış" in islem_tipi or "Geri Al" in islem_tipi:
+                            yeni_borc = max(0, mevcut_borc - islem_tutari)
+                            mesaj = f"✅ Yanlış eklenen {islem_tutari:,.2f} TL kart borcundan silindi!"
                         else:
                             yeni_borc = max(0, mevcut_borc - islem_tutari)
                             mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL ödeme yapıldı!"
-                            # GEÇMİŞE EKLENİRKEN ASGARİ Mİ TAM MI OLDUĞUNU BELİRTİYORUZ
                             islem_adi = f"{secilen_kart_adi} Ekstre Ödemesi" if "Ekstre" in islem_tipi else f"{secilen_kart_adi} Asgari Ödemesi"
                             zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
                             ws_islemler.append_row([get_new_id(df_islemler), "Gider", islem_adi, islem_tutari, zaman, "İhtiyaç", "Diğer"])
