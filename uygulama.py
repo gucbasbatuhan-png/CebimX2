@@ -281,7 +281,7 @@ else:
     toplam_kk_borc = 0.0
 
 if not df_borclar.empty:
-    toplam_manuel_borc = df_borclar['toplam_miktar'].sum() - df_borclar['odenen'].sum()
+    toplam_manuel_borc = pd.to_numeric(df_borclar['toplam_miktar']).sum() - pd.to_numeric(df_borclar['odenen']).sum()
 else:
     toplam_manuel_borc = 0.0
 
@@ -323,10 +323,11 @@ sekmeler = st.tabs([
 # --- SEKME 1: ANA KUMANDA ---
 with sekmeler[0]:
     st.error(f"💎 GERÇEK NET VARLIĞIN (NET WORTH): **{gercek_net_varlik:,.2f} TL**")
-    kol1, kol2, kol3 = st.columns(3)
+    kol1, kol2, kol3, kol4 = st.columns(4)
     kol1.metric("Net Nakit (TL)", f"{net_nakit:,.2f} TL")
     kol2.metric("Toplam Yastık Altı", f"{toplam_yastik_tl:,.2f} TL")
     kol3.metric("Toplam Kart Borcu", f"{toplam_kk_borc:,.2f} TL")
+    kol4.metric("Elden / Diğer Borçlar", f"{toplam_manuel_borc:,.2f} TL")
     
     if varlik_kategorileri:
         st.divider()
