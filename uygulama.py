@@ -78,6 +78,7 @@ def get_df(sheet_name):
         "taksitler": ["id", "kart_id", "aciklama", "aylik_tutar", "kalan_ay"],
         "yastik_alti": ["varlik_tipi", "miktar"],
         "manuel_borclar": ["id", "borc_adi", "toplam_miktar", "odenen", "tarih"],
+        "krediler": ["id", "kredi_adi", "toplam_borc", "odenen", "aylik_taksit", "kalan_ay", "tarih"], # YENİ: KREDİLER TABLOSU
         "abonelikler": ["id", "isim", "tutar", "odeme_gunu"],
         "butceler": ["id", "kategori", "limit_tutar"],
         "faturalar": ["id", "isim", "durum"],
@@ -119,10 +120,8 @@ def get_df(sheet_name):
 def get_new_id(df):
     return int(df['id'].max() + 1) if not df.empty and 'id' in df.columns else 1
 
-# YENİ EKLENEN KURŞUN GEÇİRMEZ SATIR BULMA MOTORU
 def get_row_idx(df, col_name, value):
     try:
-        # Tipi ne olursa olsun (yazı/sayı) string'e çevirip garantili eşleştirme yapar
         return int(df.index[df[col_name].astype(str) == str(value)].tolist()[0] + 2)
     except:
         return None
@@ -188,6 +187,7 @@ try:
     df_taksitler, ws_taksitler = get_df("taksitler")
     df_yastik, ws_yastik = get_df("yastik_alti")
     df_borclar, ws_borclar = get_df("manuel_borclar")
+    df_krediler, ws_krediler = get_df("krediler") # YENİ: Krediler sayfası
     df_abonelikler, ws_abonelikler = get_df("abonelikler")
     df_butceler, ws_butceler = get_df("butceler")
     df_faturalar, ws_faturalar = get_df("faturalar")
@@ -200,6 +200,7 @@ try:
     df_taksitler = clean_numeric(df_taksitler, ['aylik_tutar'])
     df_yastik = clean_numeric(df_yastik, ['miktar'])
     df_borclar = clean_numeric(df_borclar, ['toplam_miktar', 'odenen'])
+    df_krediler = clean_numeric(df_krediler, ['toplam_borc', 'odenen', 'aylik_taksit']) # YENİ: Kredi matematik temizliği
     df_abonelikler = clean_numeric(df_abonelikler, ['tutar'])
     df_butceler = clean_numeric(df_butceler, ['limit_tutar'])
     if not df_notlar.empty: df_notlar = df_notlar.fillna("")
@@ -217,7 +218,7 @@ if df_yastik.empty:
     clear_cache_and_rerun()
 
 kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", 
-              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Büşra", "Ek Hesap Ödemesi"]
+              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon"]
 
 if df_butceler.empty:
     for i, kat in enumerate(kategoriler):
@@ -293,6 +294,15 @@ if not df_borclar.empty:
 else:
     toplam_manuel_borc = 0.0
 
+# YENİ EKLENEN KREDİ TOPLAM BORCU
+if not df_krediler.empty:
+    toplam_kredi_borcu = pd.to_numeric(df_krediler['toplam_borc']).sum() - pd.to_numeric(df_krediler['odenen']).sum()
+else:
+    toplam_kredi_borcu = 0.0
+
+# Hem elden borçları hem de kredileri birleştirip ekrana basmak için
+toplam_diger_borclar = toplam_manuel_borc + toplam_kredi_borcu
+
 # SARRAF VE AİLE KASASI MOTORU
 toplam_yastik_tl = 0.0
 varlik_kategorileri = {} 
@@ -320,7 +330,8 @@ if not df_yastik.empty:
         varlik_kategorileri[kat] = varlik_kategorileri.get(kat, 0.0) + tl_karsiligi
         varlik_tipleri[birim] = varlik_tipleri.get(birim, 0.0) + miktar
 
-gercek_net_varlik = net_nakit + toplam_yastik_tl - toplam_kk_borc - toplam_manuel_borc
+# Net Varlık hesabından Kredileri de Düşüyoruz!
+gercek_net_varlik = net_nakit + toplam_yastik_tl - toplam_kk_borc - toplam_diger_borclar
 
 # --- 8. SEKMELER (15 SEKME) ---
 sekmeler = st.tabs([
@@ -342,10 +353,10 @@ with sekmeler[0]:
     
     if borclari_goster:
         kol3.metric("Toplam Kart Borcu", f"{toplam_kk_borc:,.2f} TL")
-        kol4.metric("Elden / Diğer Borçlar", f"{toplam_manuel_borc:,.2f} TL")
+        kol4.metric("Elden Borç / Krediler", f"{toplam_diger_borclar:,.2f} TL")
     else:
         kol3.metric("Toplam Kart Borcu", "👀 Gizli")
-        kol4.metric("Elden / Diğer Borçlar", "👀 Gizli")
+        kol4.metric("Elden Borç / Krediler", "👀 Gizli")
     
     if varlik_kategorileri:
         st.divider()
@@ -435,7 +446,7 @@ with sekmeler[0]:
             use_container_width=True
         )
 
-# --- SEKME 2: NOTLAR ---
+# --- SEKME 2: NOTLAR (KUSURSUZ VE HIZLI YENİLEME) ---
 with sekmeler[1]:
     st.subheader("📝 Kişisel Not Defteri")
     
@@ -467,11 +478,14 @@ with sekmeler[1]:
             with st.expander(f"📌 {row['baslik']} (Tarih: {row['tarih']})"):
                 st.write(row['icerik'])
                 if st.button("🗑️ Notu Sil", key=f"del_not_{row['id']}"):
-                    row_idx = get_row_idx(df_notlar, 'id', row['id'])
-                    if row_idx:
-                        ws_notlar.delete_rows(row_idx)
-                        st.warning("Not silindi!")
-                        clear_cache_and_rerun()
+                    try:
+                        row_idx = get_row_idx(df_notlar, 'id', row['id'])
+                        if row_idx:
+                            ws_notlar.delete_rows(row_idx)
+                            st.warning("Not silindi!")
+                            clear_cache_and_rerun()
+                    except Exception as e:
+                        st.error(f"Silinirken hata oluştu: {e}")
 
 # --- SEKME 3: GELİRLER ---
 with sekmeler[2]:
@@ -487,7 +501,7 @@ with sekmeler[2]:
                 time.sleep(1)
                 clear_cache_and_rerun()
 
-# --- SEKME 4: GİDERLER ---
+# --- SEKME 4: GİDERLER (AKILLI HARCAMA & CHECKLIST YÖNETİMİ) ---
 with sekmeler[3]:
     st.subheader("🛍️ Akıllı Harcama ve Kart Asistanı")
     with st.form("harcama_formu", clear_on_submit=True):
@@ -1118,6 +1132,72 @@ with sekmeler[14]:
 
     st.divider()
     
+    # YENİ EKLENEN BANKA KREDİLERİ SİSTEMİ
+    st.subheader("🏦 Banka Kredileri")
+    with st.expander("➕ Yeni Kredi Ekle", expanded=False):
+        with st.form("kredi_ekle_formu"):
+            kr_adi = st.text_input("Kredi Adı (Örn: İhtiyaç Kredisi, Araç Kredisi)")
+            kr_toplam = st.number_input("Toplam Geri Ödeme Tutarı (TL)", min_value=0.0, step=1000.0)
+            kr_odenen = st.number_input("Şu Ana Kadar Ödenen (TL)", min_value=0.0, step=1000.0)
+            kr_taksit = st.number_input("Aylık Taksit Tutarı (TL)", min_value=0.0, step=100.0)
+            kr_ay = st.number_input("Kalan Vade (Ay)", min_value=1, step=1)
+            
+            if st.form_submit_button("Krediyi Kaydet"):
+                if kr_adi != "" and kr_toplam > 0:
+                    zaman = datetime.now().strftime("%Y-%m-%d")
+                    ws_krediler.append_row([get_new_id(df_krediler), kr_adi, kr_toplam, kr_odenen, kr_taksit, kr_ay, zaman])
+                    st.success(f"✅ {kr_adi} eklendi!")
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+                else:
+                    st.error("Kredi adı ve toplam tutar giriniz!")
+
+    if not df_krediler.empty:
+        df_goster_kredi = df_krediler.copy()
+        df_goster_kredi['Kalan Borç'] = pd.to_numeric(df_goster_kredi['toplam_borc']) - pd.to_numeric(df_goster_kredi['odenen'])
+        st.write("### Mevcut Kredilerin")
+        st.dataframe(df_goster_kredi[['kredi_adi', 'toplam_borc', 'odenen', 'Kalan Borç', 'aylik_taksit', 'kalan_ay']].rename(columns={'kredi_adi':'Kredi', 'toplam_borc':'Toplam', 'odenen':'Ödenen', 'aylik_taksit':'Aylık Taksit', 'kalan_ay':'Kalan Ay'}), use_container_width=True, hide_index=True)
+        
+        kr_col1, kr_col2 = st.columns(2)
+        with kr_col1:
+            kr_secilen = st.selectbox("İşlem Yapılacak Kredi", df_goster_kredi['kredi_adi'].tolist())
+            kr_islem_tipi = st.radio("İşlem Tipi", ["Normal Taksit Öde", "Ara Ödeme Yap"])
+            kr_ara_odeme = st.number_input("Ara Ödeme Tutarı (TL)", min_value=0.0, step=100.0) if kr_islem_tipi == "Ara Ödeme Yap" else 0.0
+            
+            if st.button("Ödemeyi Kaydet", key="kr_ode_btn"):
+                row_idx = get_row_idx(df_krediler, 'kredi_adi', kr_secilen)
+                if row_idx:
+                    kr_mevcut_odenen = safe_float(df_krediler.loc[df_krediler['kredi_adi'].astype(str) == str(kr_secilen), 'odenen'].iloc[0])
+                    kr_mevcut_ay = int(pd.to_numeric(df_krediler.loc[df_krediler['kredi_adi'].astype(str) == str(kr_secilen), 'kalan_ay'].iloc[0]))
+                    kr_aylik = safe_float(df_krediler.loc[df_krediler['kredi_adi'].astype(str) == str(kr_secilen), 'aylik_taksit'].iloc[0])
+                    
+                    if kr_islem_tipi == "Normal Taksit Öde":
+                        odenecek = kr_aylik
+                        yeni_ay = max(0, kr_mevcut_ay - 1)
+                        yeni_odenen = kr_mevcut_odenen + odenecek
+                        ws_krediler.update_cell(row_idx, 4, yeni_odenen)
+                        ws_krediler.update_cell(row_idx, 6, yeni_ay)
+                        islem_ismi = f"{kr_secilen} Taksit Ödemesi"
+                    else:
+                        odenecek = kr_ara_odeme
+                        yeni_odenen = kr_mevcut_odenen + odenecek
+                        ws_krediler.update_cell(row_idx, 4, yeni_odenen)
+                        islem_ismi = f"{kr_secilen} Ara Ödemesi"
+                        
+                    zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    ws_islemler.append_row([get_new_id(df_islemler), "Gider", islem_ismi, odenecek, zaman, "İhtiyaç", "Diğer"])
+                    clear_cache_and_rerun()
+                    
+        with kr_col2:
+            st.write("Tehlikeli Bölge")
+            if st.button("Seçili Krediyi Tamamen Sil", type="primary", key="kr_sil_btn"):
+                row_idx = get_row_idx(df_krediler, 'kredi_adi', kr_secilen)
+                if row_idx:
+                    ws_krediler.delete_rows(row_idx)
+                    clear_cache_and_rerun()
+
+    st.divider()
+
     st.subheader("🤝 Elden / Eski Borç Takibi")
     with st.expander("➕ Yeni Borç/Yükümlülük Ekle", expanded=True):
         with st.form("borc_ekle_formu"):
