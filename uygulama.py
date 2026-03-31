@@ -1048,12 +1048,12 @@ with sekmeler[14]:
                         row_idx = int(df_kartlar[df_kartlar['kart_adi'] == secilen_kart_adi].index[0] + 2)
                         mevcut_borc = safe_float(df_kartlar.loc[row_idx-2, 'guncel_borc'])
                         
-                        if "Ekle" in islem_tipi:
-                            yeni_borc = mevcut_borc + islem_tutari
-                            mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL borç eklendi!"
-                        elif "Yanlış" in islem_tipi or "Geri Al" in islem_tipi:
+                        if "Yanlış" in islem_tipi or "Geri Al" in islem_tipi:
                             yeni_borc = max(0, mevcut_borc - islem_tutari)
                             mesaj = f"✅ Yanlış eklenen {islem_tutari:,.2f} TL kart borcundan silindi!"
+                        elif "Ekle" in islem_tipi:
+                            yeni_borc = mevcut_borc + islem_tutari
+                            mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL borç eklendi!"
                         else:
                             yeni_borc = max(0, mevcut_borc - islem_tutari)
                             mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL ödeme yapıldı!"
