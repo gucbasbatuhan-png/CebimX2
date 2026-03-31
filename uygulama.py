@@ -92,7 +92,6 @@ def get_df(sheet_name):
         
     ws = worksheets[sheet_name]
     
-    # 429 Kotalarını Engelleyen Zeki Seçici Hafıza:
     if 'dirty_sheets' not in st.session_state:
         st.session_state.dirty_sheets = set()
     if 'refresh_tokens' not in st.session_state:
@@ -106,7 +105,6 @@ def get_df(sheet_name):
     data = fetch_sheet_data(sheet_name, token)
     df = pd.DataFrame(data)
     
-    # OTO-TAMİR: Sayfa var ama başlık yoksa (Özellikle notlar ve faturalar için)
     if not df.empty and 'id' not in df.columns and sheet_name in cols:
         ws.insert_row(cols[sheet_name], index=1)
         st.session_state.dirty_sheets.add(sheet_name)
@@ -211,7 +209,7 @@ if df_yastik.empty:
     clear_cache_and_rerun()
 
 kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", 
-              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi", "KK Yapılandırma"]
+              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon"]
 
 if df_butceler.empty:
     for i, kat in enumerate(kategoriler):
@@ -1042,7 +1040,8 @@ with sekmeler[14]:
             with st.form("kk_borc_formu"):
                 kart_isimleri = df_kartlar['kart_adi'].tolist()
                 secilen_kart_adi = st.selectbox("İşlem Yapılacak Kart", kart_isimleri)
-                islem_tipi = st.radio("İşlem Tipi", ["Borç Ekle (Geçmiş Harcama)", "Borç Öde (Ekstre Ödemesi)"], horizontal=True)
+                # YENİ ASGARİ ÖDEME SEÇENEĞİ EKLENDİ
+                islem_tipi = st.radio("İşlem Tipi", ["Borç Ekle (Geçmiş Harcama)", "Borç Öde (Ekstre Ödemesi)", "Asgari Ödeme Yap"], horizontal=True)
                 islem_tutari = st.number_input("Tutar (TL)", min_value=0.0, step=100.0)
                 
                 if st.form_submit_button("Kartı Güncelle"):
@@ -1056,8 +1055,10 @@ with sekmeler[14]:
                         else:
                             yeni_borc = max(0, mevcut_borc - islem_tutari)
                             mesaj = f"✅ {secilen_kart_adi} kartına {islem_tutari:,.2f} TL ödeme yapıldı!"
+                            # GEÇMİŞE EKLENİRKEN ASGARİ Mİ TAM MI OLDUĞUNU BELİRTİYORUZ
+                            islem_adi = f"{secilen_kart_adi} Ekstre Ödemesi" if "Ekstre" in islem_tipi else f"{secilen_kart_adi} Asgari Ödemesi"
                             zaman = datetime.now().strftime("%Y-%m-%d %H:%M")
-                            ws_islemler.append_row([get_new_id(df_islemler), "Gider", f"{secilen_kart_adi} Ekstre Ödemesi", islem_tutari, zaman, "İhtiyaç", "Diğer"])
+                            ws_islemler.append_row([get_new_id(df_islemler), "Gider", islem_adi, islem_tutari, zaman, "İhtiyaç", "Diğer"])
                             
                         ws_kartlar.update_cell(row_idx, 4, yeni_borc)
                         st.success(mesaj)
