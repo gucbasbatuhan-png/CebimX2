@@ -16,7 +16,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GOOGLE SHEETS BAĞLANTI & OTO-TAMİRLİ HAFIZA MOTORU ---
+# --- 2. GOOGLE SHEETS BAĞLANTI & AKILLI HAFIZA MOTORU (V12 OPTİMİZASYONLU) ---
 @st.cache_resource
 def get_gsheet_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -25,15 +25,15 @@ def get_gsheet_client():
     return gspread.authorize(creds)
 
 @st.cache_resource(ttl=600)
-def get_df(sheet_name):
+def get_all_worksheets():
+    # TEK BİR API İSTEĞİ İLE TÜM SAYFALARI PAKET OLARAK ALIYORUZ! (429 Hatasını Çözen Yer)
     client = get_gsheet_client()
     sh = client.open_by_url(st.secrets["gsheets"]["url"])
+    return sh, {ws.title: ws for ws in sh.worksheets()}
+
+def get_df(sheet_name):
+    sh, worksheets = get_all_worksheets()
     
-    try:
-        worksheet = sh.worksheet(sheet_name)
-    except:
-        worksheet = sh.add_worksheet(title=sheet_name, rows="100", cols="20")
-        
     cols = {
         "islemler": ["id", "tip", "isim", "miktar", "tarih", "ihtiyac_mi", "kategori"],
         "ticaret": ["id", "urun_adi", "alis_fiyati", "tahmini_satis"],
@@ -48,26 +48,20 @@ def get_df(sheet_name):
         "notlar": ["id", "baslik", "icerik", "tarih"]
     }
     
-    tum_hucreler = worksheet.get_all_values()
-    
-    if not tum_hucreler and sheet_name in cols:
-        worksheet.append_row(cols[sheet_name])
-        df = pd.DataFrame(columns=cols[sheet_name])
-    else:
-        try:
-            data = worksheet.get_all_records()
-            df = pd.DataFrame(data)
-            
-            # Başlıkları eksik sayfaları otomatik onar
-            if not df.empty and 'id' not in df.columns and sheet_name in cols:
-                worksheet.insert_row(cols[sheet_name], index=1)
-                data = worksheet.get_all_records()
-                df = pd.DataFrame(data)
-                
-        except:
-            df = pd.DataFrame(columns=cols.get(sheet_name, []))
-            
-    return df, worksheet
+    if sheet_name not in worksheets:
+        ws = sh.add_worksheet(title=sheet_name, rows="100", cols="20")
+        ws.append_row(cols[sheet_name])
+        st.cache_resource.clear() 
+        return pd.DataFrame(columns=cols[sheet_name]), ws
+        
+    ws = worksheets[sheet_name]
+    try:
+        data = ws.get_all_records()
+        df = pd.DataFrame(data)
+    except:
+        df = pd.DataFrame(columns=cols.get(sheet_name, []))
+        
+    return df, ws
 
 def get_new_id(df):
     return int(df['id'].max() + 1) if not df.empty and 'id' in df.columns else 1
@@ -86,17 +80,14 @@ def clean_numeric(df, columns):
 
 def safe_float(val):
     try:
-        if isinstance(val, str):
-            val = val.replace(',', '.')
+        if isinstance(val, str): val = val.replace(',', '.')
         if val == "" or pd.isna(val): return 0.0
         return float(val)
-    except:
-        return 0.0
+    except: return 0.0
 
 # --- 3. GİRİŞ (LOGIN) SİSTEMİ ---
 if 'giris_yapildi' not in st.session_state:
     st.session_state.giris_yapildi = False
-    st.session_state.kullanici_tipi = None
 
 if not st.session_state.giris_yapildi:
     st.title("🔐 CebimX Giriş Ekranı")
@@ -106,13 +97,11 @@ if not st.session_state.giris_yapildi:
             kadi = st.text_input("Kullanıcı Adı")
             sifre = st.text_input("Şifre", type="password")
             giris_btn = st.button("Giriş Yap", use_container_width=True)
-            
             if giris_btn:
                 if kadi == "admin" and sifre == st.secrets["kullanici"]["sifre"]:
                     st.success("✅ Başarıyla giriş yaptınız!")
                     time.sleep(1) 
                     st.session_state.giris_yapildi = True
-                    st.session_state.kullanici_tipi = "gercek"
                     st.rerun()
                 else:
                     st.error("❌ Lütfen kullanıcı adı ve şifrenizi kontrol edin.")
@@ -120,14 +109,9 @@ if not st.session_state.giris_yapildi:
 
 # --- 4. ÇIKIŞ YAPMA BUTONU (YAN MENÜ) ---
 with st.sidebar:
-    if st.session_state.kullanici_tipi == "gercek":
-        st.success("👤 Hesap: **Ana Yönetici**")
-    else:
-        st.warning("👤 Hesap: **Misafir (Demo)**")
-        
+    st.success("👤 Hesap: **Ana Yönetici**")
     if st.button("🚪 Çıkış Yap", use_container_width=True):
         st.session_state.giris_yapildi = False
-        st.session_state.kullanici_tipi = None
         st.rerun()
 
 st.title("💸 CebimX:Kişisel Finans Yönetimi")
@@ -436,7 +420,7 @@ with sekmeler[2]:
     st.write("Ana sayfadaki checklist'te görünmesi için faturanın adını yaz. Herhangi bir miktar düşmez, sadece hatırlatıcıdır.")
     
     with st.form("fatura_ekle_formu", clear_on_submit=True):
-        f_isim = st.text_input("Fatura/Görev Adı (Örn: Elektrik, Su, Aidat)")
+        f_isim = text_input_isim = st.text_input("Fatura/Görev Adı (Örn: Elektrik, Su, Aidat)")
         if st.form_submit_button("Ana Sayfadaki Listeye Ekle"):
             if f_isim:
                 ws_faturalar.append_row([get_new_id(df_faturalar), f_isim, "False"])
