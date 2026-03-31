@@ -443,7 +443,7 @@ with sekmeler[0]:
             use_container_width=True
         )
 
-# --- SEKME 2: NOTLAR ---
+# --- SEKME 2: NOTLAR (KUSURSUZ VE HIZLI YENİLEME) ---
 with sekmeler[1]:
     st.subheader("📝 Kişisel Not Defteri")
     
@@ -501,7 +501,30 @@ with sekmeler[2]:
 # --- SEKME 4: GİDERLER (AKILLI HARCAMA & CHECKLIST YÖNETİMİ) ---
 with sekmeler[3]:
     st.subheader("🛍️ Akıllı Harcama ve Kart Asistanı")
-    # FORM BURADAN KALDIRILDI - ANINDA TEPKİ VERMESİ İÇİN CONTAINER KULLANILIYOR
+    
+    # YENİ: AKILLI KART ASİSTANI MOTORU
+    if not df_kartlar.empty:
+        bugun_gun = datetime.now().day
+        en_iyi_kart_id = None
+        en_iyi_kart_adi = ""
+        max_gun = -1
+        
+        for _, row in df_kartlar.iterrows():
+            h_kesim = int(row['hesap_kesim'])
+            if h_kesim > bugun_gun:
+                kalan_gun = h_kesim - bugun_gun
+            else:
+                kalan_gun = (h_kesim + 30) - bugun_gun
+                
+            kalan_limit = safe_float(row['kart_limit']) - safe_float(row['guncel_borc'])
+            if kalan_gun > max_gun and kalan_limit > 0:
+                max_gun = kalan_gun
+                en_iyi_kart_id = row['id']
+                en_iyi_kart_adi = row['kart_adi']
+        
+        if en_iyi_kart_adi:
+            st.info(f"💡 **Asistanın Tavsiyesi:** Şu an en mantıklı ödeme aracı **{en_iyi_kart_adi}**. (Hesap kesimine yaklaşık {max_gun} gün var ve limiti müsait).")
+            
     with st.container(border=True):
         h_kategori = st.selectbox("Harcama Kategorisi", kategoriler)
         h_miktar = st.number_input("Tutar (TL)", min_value=0.0, step=100.0)
@@ -514,7 +537,12 @@ with sekmeler[3]:
         if odeme_tipi == "Kredi Kartı":
             if not df_kartlar.empty:
                 kart_secenekleri = dict(zip(df_kartlar['id'], df_kartlar['kart_adi']))
-                secilen_kart_id = st.selectbox("Hangi Kartı Kullanacaksın?", options=list(kart_secenekleri.keys()), format_func=lambda x: kart_secenekleri[x])
+                # Asistanın önerdiği kartı varsayılan olarak seçili getirmeye çalışalım
+                varsayilan_index = 0
+                if en_iyi_kart_id and en_iyi_kart_id in kart_secenekleri.keys():
+                    varsayilan_index = list(kart_secenekleri.keys()).index(en_iyi_kart_id)
+                    
+                secilen_kart_id = st.selectbox("Hangi Kartı Kullanacaksın?", options=list(kart_secenekleri.keys()), format_func=lambda x: kart_secenekleri[x], index=varsayilan_index)
                 t_ay = st.number_input("Kaç Taksit?", min_value=1, step=1, max_value=36)
             else:
                 st.warning("⚠️ Sisteme kayıtlı kart yok! Lütfen 'Kart' sekmesinden ekleyin.")
