@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.express as px
 import yfinance as yf
 import time
@@ -144,6 +144,33 @@ def safe_float(val):
         return float(val)
     except: return 0.0
 
+# --- SERİ HESAPLAMA MOTORU (🔥 & ❄️) ---
+def calculate_streaks(df):
+    if df.empty: return 0, 0
+    df = df.copy()
+    df['tarih_sadece'] = pd.to_datetime(df['tarih'], errors='coerce').dt.date
+    bugun = datetime.now().date()
+    
+    # 🔥 Alev Serisi (Sıfır Toplam Harcama)
+    alev = 0
+    t_giderler = df[df['tip'].isin(['Gider', 'KK Gider'])]
+    for i in range(365):
+        kontrol_tarihi = bugun - timedelta(days=i)
+        gunluk_harcama = t_giderler[t_giderler['tarih_sadece'] == kontrol_tarihi]
+        if gunluk_harcama.empty: alev += 1
+        else: break
+            
+    # ❄️ Buz Serisi (Sıfır Keyfi Harcama)
+    buz = 0
+    keyfi_giderler = df[(df['tip'].isin(['Gider', 'KK Gider'])) & (df['ihtiyac_mi'] == 'İstek')]
+    for i in range(365):
+        kontrol_tarihi = bugun - timedelta(days=i)
+        gunluk_keyfi = keyfi_giderler[keyfi_giderler['tarih_sadece'] == kontrol_tarihi]
+        if gunluk_keyfi.empty: buz += 1
+        else: break
+            
+    return alev, buz
+
 # --- 3. GİRİŞ (LOGIN) SİSTEMİ ---
 if 'giris_yapildi' not in st.session_state:
     st.session_state.giris_yapildi = False
@@ -174,8 +201,8 @@ with st.sidebar:
     
     st.divider()
     st.write("🗓️ **Bütçe Döngüsü**")
-    bugun = datetime.now()
-    varsayilan_tarih = datetime(bugun.year, bugun.month, 1).date()
+    bugun_dt = datetime.now()
+    varsayilan_tarih = datetime(bugun_dt.year, bugun_dt.month, 1).date()
     
     if 'dongu_baslangici' not in st.session_state:
         st.session_state.dongu_baslangici = varsayilan_tarih
@@ -280,8 +307,9 @@ kol_kur5.success(f"⟠ ETH: **{st.session_state.eth_try:,.0f} TL**")
 st.divider()
 
 # --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK (ESNEK DÖNGÜ) ---
+alev_serisi, buz_serisi = calculate_streaks(df_islemler)
+
 if not df_islemler.empty:
-    # Tüm tarihleri analiz için gerçek datetime formatına çeviriyoruz
     df_islemler['gercek_tarih'] = pd.to_datetime(df_islemler['tarih'], errors='coerce')
     
     toplam_gelir = df_islemler[df_islemler['tip'] == 'Gelir']['miktar'].sum()
@@ -357,6 +385,22 @@ sekmeler = st.tabs([
 
 # --- SEKME 1: ANA KUMANDA ---
 with sekmeler[0]:
+    # SERİ GÖSTERGELERİ (OYUNLAŞTIRMA)
+    col_seri1, col_seri2, col_seri3 = st.columns([1, 1, 2])
+    with col_seri1:
+        st.metric("🔥 Alev Serisi", f"{alev_serisi} Gün", help="Hiç harcama yapmadığın gün sayısı (Sıfır Harcama)")
+    with col_seri2:
+        st.metric("❄️ Buz Serisi", f"{buz_serisi} Gün", help="Sadece 'İhtiyaç' aldığın gün sayısı (Keyfi Harcama Yok)")
+    with col_seri3:
+        if alev_serisi >= 3:
+            st.success(f"Dostum yanıyorsun! {alev_serisi} gündür cebinden tek kuruş çıkmadı. 🔥")
+        elif buz_serisi >= 5:
+            st.info(f"Tam bir irade ustasısın. {buz_serisi} gündür keyfi harcama yapmıyorsun! ❄️")
+        else:
+            st.write("Harika gidiyorsun! Tasarruf ettikçe serilerin artacak, zinciri bozma! 🚀")
+
+    st.divider()
+
     c_net, c_goz = st.columns([5, 1])
     with c_net:
         st.error(f"💎 GERÇEK NET VARLIĞIN (NET WORTH): **{gercek_net_varlik:,.2f} TL**")
@@ -584,8 +628,8 @@ with sekmeler[3]:
                     tip_kayit = "Gider"
                     
                 ws_islemler.append_row([get_new_id(df_islemler), tip_kayit, h_kategori, h_miktar, zaman, ihtiyac_durumu, h_kategori])
-                st.success("✅ Harcama başarıyla işlendi!")
-                time.sleep(1)
+                st.success("✅ Harcama başarıyla işlendi! Serilerini kontrol etmeyi unutma 😉")
+                time.sleep(1.5)
                 clear_cache_and_rerun()
             else:
                 st.error("Lütfen tutar ve kategori girin.")
