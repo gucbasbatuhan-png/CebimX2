@@ -168,9 +168,19 @@ if not st.session_state.giris_yapildi:
                     st.error("❌ Lütfen kullanıcı adı ve şifrenizi kontrol edin.")
     st.stop()
 
-# --- 4. ÇIKIŞ YAPMA BUTONU (YAN MENÜ) ---
+# --- 4. ÇIKIŞ YAPMA & MAAŞ DÖNGÜSÜ BUTONU (YAN MENÜ) ---
 with st.sidebar:
     st.success("👤 Hesap: **Ana Yönetici**")
+    
+    st.divider()
+    st.write("🗓️ **Bütçe Döngüsü**")
+    bugun = datetime.now()
+    varsayilan_tarih = datetime(bugun.year, bugun.month, 1).date()
+    dongu_baslangici = st.date_input("Maaş / Başlangıç Tarihi:", value=varsayilan_tarih)
+    dongu_dt = pd.to_datetime(dongu_baslangici)
+    st.info("💡 Maaşın geçen ayın sonunda (örn: 31'inde) yattıysa o tarihi seç ki bütçen doğru hesaplansın.")
+    st.divider()
+
     if st.button("🚪 Çıkış Yap", use_container_width=True):
         st.session_state.giris_yapildi = False
         st.session_state.kullanici_tipi = None
@@ -217,7 +227,7 @@ if df_yastik.empty:
     ws_yastik.append_row(['Genel Kasa - ETH', 0])
     clear_cache_and_rerun()
 
-kategoriler = ["Market", "Alışveriş", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", 
+kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", 
               "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon"]
 
 if df_butceler.empty:
@@ -264,14 +274,17 @@ kol_kur5.success(f"⟠ ETH: **{st.session_state.eth_try:,.0f} TL**")
 st.divider()
 
 # --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK ---
-mevcut_ay_str = f"{datetime.now().year}-{datetime.now().month:02d}"
-
+# YENİ ESNEK MAAŞ DÖNGÜSÜ FİLTRELEMESİ
 if not df_islemler.empty:
+    df_islemler['gercek_tarih'] = pd.to_datetime(df_islemler['tarih'], errors='coerce')
+    
     toplam_gelir = df_islemler[df_islemler['tip'] == 'Gelir']['miktar'].sum()
     toplam_nakit_gider = df_islemler[df_islemler['tip'] == 'Gider']['miktar'].sum()
     toplam_tum_giderler = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]['miktar'].sum()
-    df_bu_ay_giderler = df_islemler[(df_islemler['tip'].isin(['Gider', 'KK Gider'])) & (df_islemler['tarih'].astype(str).str.startswith(mevcut_ay_str))]
-    df_bu_ay_gelirler = df_islemler[(df_islemler['tip'] == 'Gelir') & (df_islemler['tarih'].astype(str).str.startswith(mevcut_ay_str))]
+    
+    # BÜTÇE: YAN MENÜDE SEÇİLEN TARİHTEN BUGÜNE KADAR
+    df_bu_ay_giderler = df_islemler[(df_islemler['tip'].isin(['Gider', 'KK Gider'])) & (df_islemler['gercek_tarih'] >= dongu_dt)]
+    df_bu_ay_gelirler = df_islemler[(df_islemler['tip'] == 'Gelir') & (df_islemler['gercek_tarih'] >= dongu_dt)]
     bu_ay_toplam_gelir = df_bu_ay_gelirler['miktar'].sum() if not df_bu_ay_gelirler.empty else 0.0
 else:
     toplam_gelir = 0.0
@@ -406,7 +419,7 @@ with sekmeler[0]:
 
     st.divider()
     
-    st.subheader("⚖️ 50/30/20 Altın Bütçe Kuralı (Bu Ay)")
+    st.subheader("⚖️ 50/30/20 Altın Bütçe Kuralı (Maaş Döngüsü)")
     if bu_ay_toplam_gelir > 0:
         iht_tutar = df_bu_ay_giderler[df_bu_ay_giderler['ihtiyac_mi'] == 'İhtiyaç']['miktar'].sum() if not df_bu_ay_giderler.empty else 0.0
         ist_tutar = df_bu_ay_giderler[df_bu_ay_giderler['ihtiyac_mi'] == 'İstek']['miktar'].sum() if not df_bu_ay_giderler.empty else 0.0
@@ -428,7 +441,7 @@ with sekmeler[0]:
             if kalan_tasarruf > 0: 
                 st.progress(min(t_yuzde/100, 1.0))
     else:
-        st.info("Bu aya ait gelir kaydı bulunamadığı için 50/30/20 kuralı hesaplanamıyor. Lütfen 'Gelir' sekmesinden bu ayın gelirini ekleyin.")
+        st.info(f"Seçilen tarih ({dongu_baslangici}) itibarıyla gelir kaydı bulunamadığı için hesaplanamıyor.")
 
     st.divider()
     
@@ -502,7 +515,6 @@ with sekmeler[2]:
 with sekmeler[3]:
     st.subheader("🛍️ Akıllı Harcama ve Kart Asistanı")
     
-    # YENİ: AKILLI KART ASİSTANI MOTORU
     if not df_kartlar.empty:
         bugun_gun = datetime.now().day
         en_iyi_kart_id = None
@@ -537,7 +549,6 @@ with sekmeler[3]:
         if odeme_tipi == "Kredi Kartı":
             if not df_kartlar.empty:
                 kart_secenekleri = dict(zip(df_kartlar['id'], df_kartlar['kart_adi']))
-                # Asistanın önerdiği kartı varsayılan olarak seçili getirmeye çalışalım
                 varsayilan_index = 0
                 if en_iyi_kart_id and en_iyi_kart_id in kart_secenekleri.keys():
                     varsayilan_index = list(kart_secenekleri.keys()).index(en_iyi_kart_id)
@@ -1028,7 +1039,9 @@ with sekmeler[12]:
 # --- SEKME 14: DANIŞMAN VE TAHMİN MOTORU ---
 with sekmeler[13]:
     st.subheader("🤖 Harcama Tahmin Motoru ve Danışman")
-    bugun_gun = datetime.now().day
+    
+    gecen_gun = (datetime.now().date() - dongu_baslangici).days
+    if gecen_gun <= 0: gecen_gun = 1 # İlk gün sıfıra bölme hatası olmasın
     
     bu_ay_giderler = df_bu_ay_giderler.copy()
     if not bu_ay_giderler.empty:
@@ -1038,16 +1051,16 @@ with sekmeler[13]:
         grouped_giderler = {}
     
     if not grouped_giderler:
-        st.info("Bu ay henüz bir harcama girmedin. Harcama yaptıkça sana ay sonu tahminleri üreteceğim.")
+        st.info("Bu döngüde henüz bir harcama girmedin.")
     else:
-        st.write(f"Bugün ayın **{bugun_gun}.** günü. Şu anki harcama hızına göre ay sonu (30 gün) tahminleri:")
+        st.write(f"Maaşından bu yana **{gecen_gun}.** gün. Mevcut harcama hızına göre döngü sonu (30 gün) tahminleri:")
         tahmin_datalari = []
         for kat, miktar in grouped_giderler.items():
             if kat == "Maaş/Gelir" or kat == "Diğer": continue
-            ay_sonu_tahmin = (miktar / bugun_gun) * 30
+            ay_sonu_tahmin = (miktar / gecen_gun) * 30
             tahmin_datalari.append({"Kategori": kat, "Şu Anki Harcama": miktar, "Ay Sonu Tahmini": ay_sonu_tahmin})
             if ay_sonu_tahmin > miktar * 1.5: 
-                st.warning(f"🚨 **{kat}** kategorisinde frene bas! Şu an {miktar:,.0f} TL harcadın, bu gidişle ay sonu **{ay_sonu_tahmin:,.0f} TL**'yi bulacak!")
+                st.warning(f"🚨 **{kat}** kategorisinde frene bas! Şu an {miktar:,.0f} TL harcadın, bu gidişle **{ay_sonu_tahmin:,.0f} TL**'yi bulacak!")
         
         if tahmin_datalari:
             fig_bar = px.bar(pd.DataFrame(tahmin_datalari), x="Kategori", y=["Şu Anki Harcama", "Ay Sonu Tahmini"], barmode="group", color_discrete_sequence=['#3498db', '#e74c3c'], title="Mevcut Durum vs Ay Sonu Beklentisi")
