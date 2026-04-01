@@ -146,7 +146,9 @@ def safe_float(val):
 
 # --- SERİ HESAPLAMA MOTORU (🔥 & ❄️) ---
 def calculate_streaks(df):
-    if df.empty: return 0, 0
+    if df.empty:
+        return 0, 0
+    
     df = df.copy()
     df['tarih_sadece'] = pd.to_datetime(df['tarih'], errors='coerce').dt.date
     bugun = datetime.now().date()
@@ -157,8 +159,10 @@ def calculate_streaks(df):
     for i in range(365):
         kontrol_tarihi = bugun - timedelta(days=i)
         gunluk_harcama = t_giderler[t_giderler['tarih_sadece'] == kontrol_tarihi]
-        if gunluk_harcama.empty: alev += 1
-        else: break
+        if gunluk_harcama.empty:
+            alev += 1
+        else:
+            break
             
     # ❄️ Buz Serisi (Sıfır Keyfi Harcama)
     buz = 0
@@ -166,8 +170,10 @@ def calculate_streaks(df):
     for i in range(365):
         kontrol_tarihi = bugun - timedelta(days=i)
         gunluk_keyfi = keyfi_giderler[keyfi_giderler['tarih_sadece'] == kontrol_tarihi]
-        if gunluk_keyfi.empty: buz += 1
-        else: break
+        if gunluk_keyfi.empty:
+            buz += 1
+        else:
+            break
             
     return alev, buz
 
@@ -201,8 +207,8 @@ with st.sidebar:
     
     st.divider()
     st.write("🗓️ **Bütçe Döngüsü**")
-    bugun_dt = datetime.now()
-    varsayilan_tarih = datetime(bugun_dt.year, bugun_dt.month, 1).date()
+    bugun = datetime.now()
+    varsayilan_tarih = datetime(bugun.year, bugun.month, 1).date()
     
     if 'dongu_baslangici' not in st.session_state:
         st.session_state.dongu_baslangici = varsayilan_tarih
@@ -246,7 +252,8 @@ try:
     df_krediler = clean_numeric(df_krediler, ['toplam_borc', 'odenen', 'aylik_taksit'])
     df_abonelikler = clean_numeric(df_abonelikler, ['tutar'])
     df_butceler = clean_numeric(df_butceler, ['limit_tutar'])
-    if not df_notlar.empty: df_notlar = df_notlar.fillna("")
+    if not df_notlar.empty: 
+        df_notlar = df_notlar.fillna("")
     
 except Exception as e:
     st.error(f"⚠️ Google Sheets'e bağlanırken hata oluştu. Hata: {e}")
@@ -261,7 +268,7 @@ if df_yastik.empty:
     clear_cache_and_rerun()
 
 kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", 
-              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon"]
+              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi"]
 
 if df_butceler.empty:
     for i, kat in enumerate(kategoriler):
@@ -357,8 +364,10 @@ if not df_yastik.empty:
     for _, row in df_yastik.iterrows():
         v_tip = str(row['varlik_tipi'])
         miktar = safe_float(row['miktar'])
-        if " - " in v_tip: kat, birim = v_tip.split(" - ", 1)
-        else: kat, birim = "Genel Kasa", v_tip
+        if " - " in v_tip: 
+            kat, birim = v_tip.split(" - ", 1)
+        else: 
+            kat, birim = "Genel Kasa", v_tip
             
         tl_karsiligi = 0.0
         if birim == 'USD': tl_karsiligi = miktar * st.session_state.usd_try
@@ -628,8 +637,8 @@ with sekmeler[3]:
                     tip_kayit = "Gider"
                     
                 ws_islemler.append_row([get_new_id(df_islemler), tip_kayit, h_kategori, h_miktar, zaman, ihtiyac_durumu, h_kategori])
-                st.success("✅ Harcama başarıyla işlendi! Serilerini kontrol etmeyi unutma 😉")
-                time.sleep(1.5)
+                st.success("✅ Harcama başarıyla işlendi!")
+                time.sleep(1)
                 clear_cache_and_rerun()
             else:
                 st.error("Lütfen tutar ve kategori girin.")
@@ -1086,12 +1095,13 @@ with sekmeler[12]:
     gelecek_deger = ana_para * ((1 + (enflasyon_orani / 100)) ** yil)
     st.error(f"Bugünkü **{ana_para:,.0f} TL**, {yil} yıl sonraki fiyatlarla **{gelecek_deger:,.0f} TL** olacak.")
 
-# --- SEKME 14: DANIŞMAN VE TAHMİN MOTORU ---
+# --- SEKME 14: DANIŞMAN VE TAHMİN MOTORU (YENİLENMİŞ SABİT FİLTRE) ---
 with sekmeler[13]:
     st.subheader("🤖 Harcama Tahmin Motoru ve Danışman")
     
     gecen_gun = (datetime.now().date() - dongu_baslangici).days
-    if gecen_gun <= 0: gecen_gun = 1 # İlk gün sıfıra bölme hatası olmasın
+    if gecen_gun <= 0: 
+        gecen_gun = 1 # İlk gün sıfıra bölme hatası olmasın
     
     bu_ay_giderler = df_bu_ay_giderler.copy()
     if not bu_ay_giderler.empty:
@@ -1101,15 +1111,32 @@ with sekmeler[13]:
         grouped_giderler = {}
     
     if not grouped_giderler:
-        st.info("Bu döngüde henüz bir harcama girmedin.")
+        st.info("Bu döngüde henüz bir harcama girmedin. Harcama yaptıkça sana ay sonu tahminleri üreteceğim.")
     else:
-        st.write(f"Maaşından bu yana **{gecen_gun}.** gün. Mevcut harcama hızına göre döngü sonu (30 gün) tahminleri:")
+        st.write(f"Maaşından bu yana **{gecen_gun}.** gün. Mevcut harcama hızına göre döngü sonu tahminleri:")
         tahmin_datalari = []
+        
+        # YENİ: SABİT GİDER FİLTRESİ - BU KELİMELERİ İÇERENLER 30 İLE ÇARPILMAZ!
+        sabit_kelimeler = ["kira", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap"]
+        
         for kat, miktar in grouped_giderler.items():
-            if kat == "Maaş/Gelir" or kat == "Diğer": continue
-            ay_sonu_tahmin = (miktar / gecen_gun) * 30
+            if kat == "Maaş/Gelir" or kat == "Diğer": 
+                continue
+                
+            # Kategori isminde sabit kelimelerden biri var mı kontrol et
+            is_sabit = any(kelime in kat.lower() for kelime in sabit_kelimeler)
+            
+            if is_sabit:
+                # Sabit giderse, 30 ile çarpma, direkt mevcut tutarı yaz
+                ay_sonu_tahmin = miktar 
+            else:
+                # Değişken giderse (market, eğlence vs.), gün sayısına bölüp 30 ile çarp
+                ay_sonu_tahmin = (miktar / gecen_gun) * 30
+                
             tahmin_datalari.append({"Kategori": kat, "Şu Anki Harcama": miktar, "Ay Sonu Tahmini": ay_sonu_tahmin})
-            if ay_sonu_tahmin > miktar * 1.5: 
+            
+            # Sadece artan harcamalar için uyarı ver
+            if not is_sabit and ay_sonu_tahmin > miktar * 1.5: 
                 st.warning(f"🚨 **{kat}** kategorisinde frene bas! Şu an {miktar:,.0f} TL harcadın, bu gidişle **{ay_sonu_tahmin:,.0f} TL**'yi bulacak!")
         
         if tahmin_datalari:
