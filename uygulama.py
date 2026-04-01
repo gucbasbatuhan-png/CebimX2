@@ -1117,7 +1117,7 @@ with sekmeler[13]:
         tahmin_datalari = []
         
         # YENİ: SABİT GİDER FİLTRESİ - BU KELİMELERİ İÇERENLER 30 İLE ÇARPILMAZ!
-        sabit_kelimeler = ["kira", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap"]
+        sabit_kelimeler = ["kira", "internet", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap"]
         
         for kat, miktar in grouped_giderler.items():
             if kat == "Maaş/Gelir" or kat == "Diğer": 
