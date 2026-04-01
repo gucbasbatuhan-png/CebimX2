@@ -176,8 +176,14 @@ with st.sidebar:
     st.write("🗓️ **Bütçe Döngüsü**")
     bugun = datetime.now()
     varsayilan_tarih = datetime(bugun.year, bugun.month, 1).date()
-    dongu_baslangici = st.date_input("Maaş / Başlangıç Tarihi:", value=varsayilan_tarih)
+    
+    if 'dongu_baslangici' not in st.session_state:
+        st.session_state.dongu_baslangici = varsayilan_tarih
+        
+    dongu_baslangici = st.date_input("Maaş / Başlangıç Tarihi:", value=st.session_state.dongu_baslangici)
+    st.session_state.dongu_baslangici = dongu_baslangici
     dongu_dt = pd.to_datetime(dongu_baslangici)
+    
     st.info("💡 Maaşın geçen ayın sonunda (örn: 31'inde) yattıysa o tarihi seç ki bütçen doğru hesaplansın.")
     st.divider()
 
@@ -273,16 +279,16 @@ kol_kur4.success(f"₿ BTC: **{st.session_state.btc_try:,.0f} TL**")
 kol_kur5.success(f"⟠ ETH: **{st.session_state.eth_try:,.0f} TL**")
 st.divider()
 
-# --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK ---
-# YENİ ESNEK MAAŞ DÖNGÜSÜ FİLTRELEMESİ
+# --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK (ESNEK DÖNGÜ) ---
 if not df_islemler.empty:
+    # Tüm tarihleri analiz için gerçek datetime formatına çeviriyoruz
     df_islemler['gercek_tarih'] = pd.to_datetime(df_islemler['tarih'], errors='coerce')
     
     toplam_gelir = df_islemler[df_islemler['tip'] == 'Gelir']['miktar'].sum()
     toplam_nakit_gider = df_islemler[df_islemler['tip'] == 'Gider']['miktar'].sum()
     toplam_tum_giderler = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]['miktar'].sum()
     
-    # BÜTÇE: YAN MENÜDE SEÇİLEN TARİHTEN BUGÜNE KADAR
+    # BÜTÇE: YAN MENÜDE SEÇİLEN DÖNGÜ TARİHİNDEN BUGÜNE KADAR OLANLAR
     df_bu_ay_giderler = df_islemler[(df_islemler['tip'].isin(['Gider', 'KK Gider'])) & (df_islemler['gercek_tarih'] >= dongu_dt)]
     df_bu_ay_gelirler = df_islemler[(df_islemler['tip'] == 'Gelir') & (df_islemler['gercek_tarih'] >= dongu_dt)]
     bu_ay_toplam_gelir = df_bu_ay_gelirler['miktar'].sum() if not df_bu_ay_gelirler.empty else 0.0
@@ -441,13 +447,13 @@ with sekmeler[0]:
             if kalan_tasarruf > 0: 
                 st.progress(min(t_yuzde/100, 1.0))
     else:
-        st.info(f"Seçilen tarih ({dongu_baslangici}) itibarıyla gelir kaydı bulunamadığı için hesaplanamıyor.")
+        st.info(f"Seçilen tarih ({dongu_baslangici.strftime('%d.%m.%Y')}) itibarıyla gelir kaydı bulunamadığı için 50/30/20 kuralı hesaplanamıyor.")
 
     st.divider()
     
     st.subheader("📥 Excel / CSV Dökümü Al")
     if not df_islemler.empty:
-        csv_data = df_islemler.to_csv(index=False).encode('utf-8')
+        csv_data = df_islemler.drop(columns=['gercek_tarih'], errors='ignore').to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📊 Tüm Muhasebe Geçmişini İndir (CSV)",
             data=csv_data,
