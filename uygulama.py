@@ -153,7 +153,6 @@ def calculate_streaks(df):
     df['tarih_sadece'] = pd.to_datetime(df['tarih'], errors='coerce').dt.date
     bugun = datetime.now().date()
     
-    # 🔥 Alev Serisi (Sıfır Toplam Harcama)
     alev = 0
     t_giderler = df[df['tip'].isin(['Gider', 'KK Gider'])]
     for i in range(365):
@@ -164,7 +163,6 @@ def calculate_streaks(df):
         else:
             break
             
-    # ❄️ Buz Serisi (Sıfır Keyfi Harcama)
     buz = 0
     keyfi_giderler = df[(df['tip'].isin(['Gider', 'KK Gider'])) & (df['ihtiyac_mi'] == 'İstek')]
     for i in range(365):
@@ -314,8 +312,6 @@ kol_kur5.success(f"⟠ ETH: **{st.session_state.eth_try:,.0f} TL**")
 st.divider()
 
 # --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK (ESNEK DÖNGÜ) ---
-alev_serisi, buz_serisi = calculate_streaks(df_islemler)
-
 if not df_islemler.empty:
     df_islemler['gercek_tarih'] = pd.to_datetime(df_islemler['tarih'], errors='coerce')
     
@@ -323,7 +319,6 @@ if not df_islemler.empty:
     toplam_nakit_gider = df_islemler[df_islemler['tip'] == 'Gider']['miktar'].sum()
     toplam_tum_giderler = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]['miktar'].sum()
     
-    # BÜTÇE: YAN MENÜDE SEÇİLEN DÖNGÜ TARİHİNDEN BUGÜNE KADAR OLANLAR
     df_bu_ay_giderler = df_islemler[(df_islemler['tip'].isin(['Gider', 'KK Gider'])) & (df_islemler['gercek_tarih'] >= dongu_dt)]
     df_bu_ay_gelirler = df_islemler[(df_islemler['tip'] == 'Gelir') & (df_islemler['gercek_tarih'] >= dongu_dt)]
     bu_ay_toplam_gelir = df_bu_ay_gelirler['miktar'].sum() if not df_bu_ay_gelirler.empty else 0.0
@@ -355,7 +350,6 @@ else:
 
 toplam_diger_borclar = toplam_manuel_borc + toplam_kredi_borcu
 
-# SARRAF VE AİLE KASASI MOTORU
 toplam_yastik_tl = 0.0
 varlik_kategorileri = {} 
 varlik_tipleri = {'USD': 0, 'EUR': 0, 'GA': 0, 'Çeyrek Altın': 0, 'Yarım Altın': 0, 'Tam Altın': 0, 'Ata Altın': 0, 'BTC': 0, 'ETH': 0} 
@@ -394,7 +388,6 @@ sekmeler = st.tabs([
 
 # --- SEKME 1: ANA KUMANDA ---
 with sekmeler[0]:
-    # SERİ GÖSTERGELERİ (OYUNLAŞTIRMA)
     col_seri1, col_seri2, col_seri3 = st.columns([1, 1, 2])
     with col_seri1:
         st.metric("🔥 Alev Serisi", f"{alev_serisi} Gün", help="Hiç harcama yapmadığın gün sayısı (Sıfır Harcama)")
@@ -500,7 +493,7 @@ with sekmeler[0]:
             if kalan_tasarruf > 0: 
                 st.progress(min(t_yuzde/100, 1.0))
     else:
-        st.info(f"Seçilen tarih ({dongu_baslangici.strftime('%d.%m.%Y')}) itibarıyla gelir kaydı bulunamadığı için 50/30/20 kuralı hesaplanamıyor.")
+        st.info(f"Seçilen tarih ({dongu_baslangici.strftime('%d.%m.%Y')}) itibarıyla gelir kaydı bulunamadığı için hesaplanamıyor.")
 
     st.divider()
     
@@ -546,7 +539,7 @@ with sekmeler[1]:
         for idx, row in notlar_goster.iterrows():
             with st.expander(f"📌 {row['baslik']} (Tarih: {row['tarih']})"):
                 st.write(row['icerik'])
-                if st.button("🗑️ Notu Sil", key=f"del_not_{row['id']}"):
+                if st.button("🗑️ Notu Sil", key=f"del_not_{row['id']}_{idx}"):
                     try:
                         row_idx = get_row_idx(df_notlar, 'id', row['id'])
                         if row_idx:
@@ -700,12 +693,12 @@ with sekmeler[4]:
             
             st.divider()
             st.error("🗑️ Yanlış Eklenen Taksit Planlarını İptal Et")
-            for _, row in taksit_verileri.iterrows():
+            for idx, row in taksit_verileri.iterrows():
                 kol1, kol2, kol3, kol4 = st.columns([4, 3, 3, 1])
                 kol1.write(f"🛒 **{row['aciklama']}**")
                 kol2.write(f"💳 {row['kart_adi']}")
                 kol3.write(f"Kalan: {int(row['kalan_ay'])} Ay ({safe_float(row['aylik_tutar']) * int(row['kalan_ay']):,.2f} TL)")
-                if kol4.button("🗑️", key=f"sil_taksit_{row['id_t']}"):
+                if kol4.button("🗑️", key=f"sil_taksit_{row['id_t']}_{idx}"):
                     dusulecek_tutar = safe_float(row['aylik_tutar']) * int(row['kalan_ay'])
                     kart_row_idx = get_row_idx(df_kartlar, 'id', row['kart_id'])
                     if kart_row_idx:
@@ -806,14 +799,14 @@ with sekmeler[6]:
             st.info("Henüz eklenmiş bir kartın yok.")
         else:
             kartlar_liste = df_kartlar.sort_values(by="id", ascending=False)
-            for _, row in kartlar_liste.iterrows():
+            for idx, row in kartlar_liste.iterrows():
                 k_id = row['id']
                 kol_k1, kol_k2, kol_k3, kol_k4, kol_k5 = st.columns([3, 2, 2, 2, 1])
                 kol_k1.write(f"**{row['kart_adi']}**")
                 kol_k2.write(f"Limit: {safe_float(row['kart_limit']):,.0f}")
                 kol_k3.write(f"Borç: {safe_float(row['guncel_borc']):,.0f}")
                 kol_k4.write(f"Kesim: {row['hesap_kesim']}")
-                if kol_k5.button("🗑️", key=f"sil_kart_{k_id}"):
+                if kol_k5.button("🗑️", key=f"sil_kart_{k_id}_{idx}"):
                     kart_row_idx = get_row_idx(df_kartlar, 'id', k_id)
                     if kart_row_idx: ws_kartlar.delete_rows(kart_row_idx)
                     
@@ -841,7 +834,7 @@ with sekmeler[7]:
         b_kol6.write("**Sil**")
         st.divider()
         
-        for _, row in islemler_goster.iterrows():
+        for idx, row in islemler_goster.iterrows():
             i_id = row['id']
             kol1, kol2, kol3, kol4, kol5, kol6 = st.columns([1.5, 1, 1.5, 3, 1.5, 1])
             kol1.write(f"🕒 {str(row['tarih'])[:10]}")
@@ -854,7 +847,7 @@ with sekmeler[7]:
             kol4.write(f"📝 {row['isim']}")
             kol5.write(f"**{safe_float(row['miktar']):,.2f} TL**")
             
-            if kol6.button("🗑️", key=f"sil_islem_{i_id}"):
+            if kol6.button("🗑️", key=f"sil_islem_{i_id}_{idx}"):
                 row_idx = get_row_idx(df_islemler, 'id', i_id)
                 if row_idx:
                     ws_islemler.delete_rows(row_idx)
@@ -892,13 +885,13 @@ with sekmeler[8]:
             if df_envanter.empty:
                 st.info("Şu an satılmayı bekleyen ürünün yok.")
             else:
-                for _, row in df_envanter.iterrows():
+                for idx, row in df_envanter.iterrows():
                     t_id = row['id']
                     with st.expander(f"🛒 {row['urun_adi']} (Maliyet: {safe_float(row['alis_fiyati']):,.0f} TL)"):
-                        sat_fiyati = st.number_input("Kaça Sattın? (TL)", min_value=0.0, step=50.0, key=f"satis_input_{t_id}")
+                        sat_fiyati = st.number_input("Kaça Sattın? (TL)", min_value=0.0, step=50.0, key=f"satis_input_{t_id}_{idx}")
                         c1, c2 = st.columns(2)
                         
-                        if c1.button("✅ Satışı Onayla", key=f"sat_btn_{t_id}"):
+                        if c1.button("✅ Satışı Onayla", key=f"sat_btn_{t_id}_{idx}"):
                             if sat_fiyati > 0:
                                 row_idx = get_row_idx(df_ticaret, 'id', t_id)
                                 if row_idx:
@@ -911,7 +904,7 @@ with sekmeler[8]:
                             else:
                                 st.error("Lütfen satış fiyatı girin!")
                                 
-                        if c2.button("🗑️ Sil", key=f"sil_env_{t_id}"):
+                        if c2.button("🗑️ Sil", key=f"sil_env_{t_id}_{idx}"):
                             row_idx = get_row_idx(df_ticaret, 'id', t_id)
                             if row_idx:
                                 ws_ticaret.delete_rows(row_idx)
@@ -922,7 +915,7 @@ with sekmeler[8]:
             if df_satilanlar.empty:
                 st.info("Henüz ürün satışı yapmadın.")
             else:
-                for _, row in df_satilanlar.iterrows():
+                for idx, row in df_satilanlar.iterrows():
                     t_id = row['id']
                     t_kar = safe_float(row['tahmini_satis']) - safe_float(row['alis_fiyati'])
                     st.markdown(f"**{row['urun_adi']}**")
@@ -931,7 +924,7 @@ with sekmeler[8]:
                     c2.write(f"Satış: {safe_float(row['tahmini_satis']):,.0f}")
                     if t_kar >= 0: c3.success(f"+{t_kar:,.0f} TL")
                     else: c3.error(f"{t_kar:,.0f} TL")
-                    if c4.button("🗑️", key=f"sil_satilan_{t_id}"):
+                    if c4.button("🗑️", key=f"sil_satilan_{t_id}_{idx}"):
                         row_idx = get_row_idx(df_ticaret, 'id', t_id)
                         if row_idx:
                             ws_ticaret.delete_rows(row_idx)
@@ -945,7 +938,7 @@ with sekmeler[9]:
     if not df_hedefler.empty:
         st.subheader("🎯 Mevcut Durum")
         goals = df_hedefler.sort_values(by="id", ascending=False)
-        for _, row in goals.iterrows():
+        for idx, row in goals.iterrows():
             h_id = row['id']
             h_tutar = safe_float(row['hedef_tutar'])
             h_biriken = safe_float(row['biriken'])
@@ -960,7 +953,7 @@ with sekmeler[9]:
                     st.write(f"Tamamlanan: **%{tamamlama_orani * 100:.1f}**")
                     st.progress(tamamlama_orani)
                 with kol_sil:
-                    if st.button("🗑️", key=f"sil_hedef_top_{h_id}"):
+                    if st.button("🗑️", key=f"sil_hedef_top_{h_id}_{idx}"):
                         row_idx = get_row_idx(df_hedefler, 'id', h_id)
                         if row_idx:
                             ws_hedefler.delete_rows(row_idx)
@@ -1025,12 +1018,12 @@ with sekmeler[10]:
         toplam_abonelik = df_abonelikler['tutar'].apply(safe_float).sum()
         st.error(f"🚨 **Uyarı:** Sadece aboneliklere her ay havadan **{toplam_abonelik:,.2f} TL** ödüyorsun!")
         
-        for _, row in df_abonelikler.iterrows():
+        for idx, row in df_abonelikler.iterrows():
             kol1, kol2, kol3, kol4 = st.columns([4, 2, 2, 1])
             kol1.write(f"📺 **{row['isim']}**")
             kol2.write(f"{safe_float(row['tutar']):,.2f} TL")
             kol3.write(f"Her Ayın {row['odeme_gunu']}. Günü")
-            if kol4.button("🗑️", key=f"sil_ab_{row['id']}"):
+            if kol4.button("🗑️", key=f"sil_ab_{row['id']}_{idx}"):
                 row_idx = get_row_idx(df_abonelikler, 'id', row['id'])
                 if row_idx:
                     ws_abonelikler.delete_rows(row_idx)
@@ -1117,7 +1110,7 @@ with sekmeler[13]:
         tahmin_datalari = []
         
         # YENİ: SABİT GİDER FİLTRESİ - BU KELİMELERİ İÇERENLER 30 İLE ÇARPILMAZ!
-        sabit_kelimeler = ["kira", "internet", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap"]
+        sabit_kelimeler = ["kira", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap"]
         
         for kat, miktar in grouped_giderler.items():
             if kat == "Maaş/Gelir" or kat == "Diğer": 
