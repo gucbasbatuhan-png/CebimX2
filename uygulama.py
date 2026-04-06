@@ -311,7 +311,11 @@ kol_kur4.success(f"₿ BTC: **{st.session_state.btc_try:,.0f} TL**")
 kol_kur5.success(f"⟠ ETH: **{st.session_state.eth_try:,.0f} TL**")
 st.divider()
 
-# --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK (ESNEK DÖNGÜ) ---
+# --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK (ESNEK DÖNGÜ & SERİLER) ---
+
+# BUG FIX: Serileri burada hesaplayıp değişkenlere atıyoruz ki aşağıda NameError vermesin.
+alev_serisi, buz_serisi = calculate_streaks(df_islemler)
+
 if not df_islemler.empty:
     df_islemler['gercek_tarih'] = pd.to_datetime(df_islemler['tarih'], errors='coerce')
     
@@ -319,6 +323,7 @@ if not df_islemler.empty:
     toplam_nakit_gider = df_islemler[df_islemler['tip'] == 'Gider']['miktar'].sum()
     toplam_tum_giderler = df_islemler[df_islemler['tip'].isin(['Gider', 'KK Gider'])]['miktar'].sum()
     
+    # BÜTÇE: YAN MENÜDE SEÇİLEN DÖNGÜ TARİHİNDEN BUGÜNE KADAR OLANLAR
     df_bu_ay_giderler = df_islemler[(df_islemler['tip'].isin(['Gider', 'KK Gider'])) & (df_islemler['gercek_tarih'] >= dongu_dt)]
     df_bu_ay_gelirler = df_islemler[(df_islemler['tip'] == 'Gelir') & (df_islemler['gercek_tarih'] >= dongu_dt)]
     bu_ay_toplam_gelir = df_bu_ay_gelirler['miktar'].sum() if not df_bu_ay_gelirler.empty else 0.0
@@ -350,6 +355,7 @@ else:
 
 toplam_diger_borclar = toplam_manuel_borc + toplam_kredi_borcu
 
+# SARRAF VE AİLE KASASI MOTORU
 toplam_yastik_tl = 0.0
 varlik_kategorileri = {} 
 varlik_tipleri = {'USD': 0, 'EUR': 0, 'GA': 0, 'Çeyrek Altın': 0, 'Yarım Altın': 0, 'Tam Altın': 0, 'Ata Altın': 0, 'BTC': 0, 'ETH': 0} 
@@ -388,6 +394,7 @@ sekmeler = st.tabs([
 
 # --- SEKME 1: ANA KUMANDA ---
 with sekmeler[0]:
+    # SERİ GÖSTERGELERİ (OYUNLAŞTIRMA)
     col_seri1, col_seri2, col_seri3 = st.columns([1, 1, 2])
     with col_seri1:
         st.metric("🔥 Alev Serisi", f"{alev_serisi} Gün", help="Hiç harcama yapmadığın gün sayısı (Sıfır Harcama)")
@@ -508,7 +515,7 @@ with sekmeler[0]:
             use_container_width=True
         )
 
-# --- SEKME 2: NOTLAR (KUSURSUZ VE HIZLI YENİLEME) ---
+# --- SEKME 2: NOTLAR ---
 with sekmeler[1]:
     st.subheader("📝 Kişisel Not Defteri")
     
