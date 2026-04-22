@@ -87,7 +87,7 @@ def get_df(sheet_name):
     sh, worksheets = get_all_worksheets()
     
     cols = {
-        "islemler": ["id", "tip", "isim", "miktar", "tarih", "ihtiyac_mi", "kategori"],
+        "islemler": ["id", "tip", "isim", "miktar", "tarih", "ihtiyac_mi", "i"],
         "ticaret": ["id", "urun_adi", "alis_fiyati", "tahmini_satis"],
         "hedefler": ["id", "hedef_adi", "hedef_tutar", "biriken"],
         "kredi_kartlari": ["id", "kart_adi", "kart_limit", "guncel_borc", "hesap_kesim"],
@@ -96,7 +96,7 @@ def get_df(sheet_name):
         "manuel_borclar": ["id", "borc_adi", "toplam_miktar", "odenen", "tarih"],
         "krediler": ["id", "kredi_adi", "toplam_borc", "odenen", "aylik_taksit", "kalan_ay", "tarih"],
         "abonelikler": ["id", "isim", "tutar", "odeme_gunu"],
-        "butceler": ["id", "kategori", "limit_tutar"],
+        "butceler": ["id", "i", "limit_tutar"],
         "faturalar": ["id", "isim", "durum"],
         "notlar": ["id", "baslik", "icerik", "tarih"]
     }
@@ -285,7 +285,7 @@ if df_yastik.empty:
     clear_cache_and_rerun()
 
 kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", 
-              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi", "Kargo Gideri", "Araç Kiralama"]
+              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi", "Kargo Gideri", "Araç Kiralama", "Araç Masrafı"]
 
 if df_butceler.empty:
     for i, kat in enumerate(kategoriler):
@@ -293,7 +293,7 @@ if df_butceler.empty:
     clear_cache_and_rerun()
 
 # --- 6. CANLI PİYASALAR VE KRİPTO RADARI ---
-st.subheader("🌍 Canlı Piyasalar ve Kripto Radarı")
+st.subheader("🌍 Canlı Piyasalar ve Kripto Radarı"
 
 if 'usd_try' not in st.session_state:
     st.session_state.usd_try = 0.0
