@@ -293,7 +293,7 @@ if df_butceler.empty:
     clear_cache_and_rerun()
 
 # --- 6. CANLI PİYASALAR VE KRİPTO RADARI ---
-st.subheader("🌍 Canlı Piyasalar ve Kripto Radarı"
+st.subheader("🌍 Canlı Piyasalar ve Kripto Radarı")
 
 if 'usd_try' not in st.session_state:
     st.session_state.usd_try = 0.0
