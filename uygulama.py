@@ -29,12 +29,12 @@ class DirtyTrackerWS:
         
     def _retry_operation(self, operation, *args, **kwargs):
         self._mark_dirty()
-        for i in range(5): # Google'ı sakinleştirmek için 5 kez dener
+        for i in range(4): # Google'ı sakinleştirmek için 4 kez dener
             try:
                 return operation(*args, **kwargs)
             except Exception as e:
                 if "429" in str(e) or "Quota" in str(e) or "APIError" in str(e):
-                    time.sleep(4 + (i * 2)) # 4, 6, 8, 10 saniye bekler, asla pes etmez
+                    time.sleep(2 + i)
                 else:
                     raise e
         return operation(*args, **kwargs)
@@ -44,7 +44,6 @@ class DirtyTrackerWS:
         v_clean = [float(round(v, 2)) if isinstance(v, float) else v for v in values]
         return self._retry_operation(self.ws.append_row, v_clean, **kwargs)
         
-    # YENİ: Toplu ekleme ile Google API'yi yormayan sistem
     def append_rows(self, values_list, **kwargs):
         kwargs.setdefault('value_input_option', 'RAW')
         v_clean = [[float(round(v, 2)) if isinstance(v, float) else v for v in row] for row in values_list]
@@ -81,12 +80,12 @@ def fetch_sheet_data(sheet_name, refresh_token):
     sh, worksheets = get_all_worksheets()
     ws = worksheets.get(sheet_name)
     if ws:
-        for i in range(5): 
+        for i in range(4): 
             try:
                 return ws.get_all_records()
             except Exception as e:
                 if "429" in str(e) or "Quota" in str(e):
-                    time.sleep(3 + i)
+                    time.sleep(2 + i)
                 else:
                     return []
         try:
@@ -167,16 +166,16 @@ def safe_float(x):
     
     x = str(x).strip()
     if '.' in x and ',' in x:
-        if x.rfind(',') > x.rfind('.'): # TR Format
+        if x.rfind(',') > x.rfind('.'): # TR Format: 1.234,56
             x = x.replace('.', '').replace(',', '.')
-        else: # US Format
+        else: # US Format: 1,234.56
             x = x.replace(',', '')
     elif ',' in x:
         parts = x.split(',')
         if len(parts) == 2 and len(parts[1]) == 3 and '.' not in x:
-            x = x.replace(',', '') 
+            x = x.replace(',', '') # Binlik ayraç
         else:
-            x = x.replace(',', '.') 
+            x = x.replace(',', '.') # Kuruş
     try:
         return float(x)
     except:
@@ -220,7 +219,7 @@ def calculate_streaks(df):
             
     return alev, buz
 
-# --- 3. GİRİŞ (LOGIN) SİSTEMİ (FORM İPTAL EDİLDİ - KİLİTLENMEZ) ---
+# --- 3. GİRİŞ (LOGIN) SİSTEMİ (ANINDA TEPKİ VEREN KOD) ---
 if 'giris_yapildi' not in st.session_state:
     st.session_state.giris_yapildi = False
     st.session_state.kullanici_tipi = None
@@ -234,18 +233,16 @@ if not st.session_state.giris_yapildi:
             st.subheader("Hoş Geldiniz")
             kadi = st.text_input("Kullanıcı Adı")
             sifre = st.text_input("Şifre", type="password")
-            giris_btn = st.button("Giriş Yap", use_container_width=True, type="primary")
             
-            if giris_btn:
+            # Form kaldırıldı, anında fırlatan buton eklendi
+            if st.button("Giriş Yap", use_container_width=True, type="primary"):
                 if kadi == "admin" and sifre == st.secrets["kullanici"]["sifre"]:
-                    st.success("✅ Başarıyla giriş yaptınız!")
-                    time.sleep(0.5) 
                     st.session_state.giris_yapildi = True
                     st.session_state.kullanici_tipi = "gercek"
-                    st.rerun()
+                    st.rerun() # Beklemeden anında sistemi yenile
                 else:
                     st.error("❌ Lütfen kullanıcı adı ve şifrenizi kontrol edin.")
-    st.stop()
+    st.stop() # Giriş yapılmadıysa aşağıyı okumayı durdur
 
 # --- 4. ÇIKIŞ YAPMA & MAAŞ DÖNGÜSÜ BUTONU (YAN MENÜ) ---
 with st.sidebar:
@@ -273,39 +270,40 @@ with st.sidebar:
 
 st.title("💸 CebimX:Kişisel Finans Yönetimi")
 
-# --- 5. VERİLERİ GOOGLE SHEETS'TEN ÇEK VE TEMİZLE ---
-try:
-    df_islemler, ws_islemler = get_df("islemler")
-    df_ticaret, ws_ticaret = get_df("ticaret")
-    df_hedefler, ws_hedefler = get_df("hedefler")
-    df_kartlar, ws_kartlar = get_df("kredi_kartlari")
-    df_taksitler, ws_taksitler = get_df("taksitler")
-    df_yastik, ws_yastik = get_df("yastik_alti")
-    df_borclar, ws_borclar = get_df("manuel_borclar")
-    df_krediler, ws_krediler = get_df("krediler")
-    df_abonelikler, ws_abonelikler = get_df("abonelikler")
-    df_butceler, ws_butceler = get_df("butceler")
-    df_faturalar, ws_faturalar = get_df("faturalar")
-    df_notlar, ws_notlar = get_df("notlar")
-    
-    df_islemler = clean_numeric(df_islemler, ['miktar'])
-    df_ticaret = clean_numeric(df_ticaret, ['alis_fiyati', 'tahmini_satis'])
-    df_hedefler = clean_numeric(df_hedefler, ['hedef_tutar', 'biriken'])
-    df_kartlar = clean_numeric(df_kartlar, ['kart_limit', 'guncel_borc'])
-    df_taksitler = clean_numeric(df_taksitler, ['aylik_tutar'])
-    df_yastik = clean_numeric(df_yastik, ['miktar'])
-    df_borclar = clean_numeric(df_borclar, ['toplam_miktar', 'odenen'])
-    df_krediler = clean_numeric(df_krediler, ['toplam_borc', 'odenen', 'aylik_taksit'])
-    df_abonelikler = clean_numeric(df_abonelikler, ['tutar'])
-    df_butceler = clean_numeric(df_butceler, ['limit_tutar'])
-    if not df_notlar.empty: 
-        df_notlar = df_notlar.fillna("")
-    
-except Exception as e:
-    st.error(f"⚠️ Veriler yüklenirken bağlantı yavaşladı. Lütfen 5 saniye bekleyip sayfayı yenileyin. (Detay: {e})")
-    st.stop()
+# --- 5. VERİLERİ GOOGLE SHEETS'TEN ÇEK VE TEMİZLE (YÜKLEME EKRANLI) ---
+# YENİ: Kullanıcıyı zombi ekranda bırakmamak için spinner eklendi
+with st.spinner("📡 Veriler Google Sheets'ten çekiliyor... (Lütfen birkaç saniye bekleyin)"):
+    try:
+        df_islemler, ws_islemler = get_df("islemler")
+        df_ticaret, ws_ticaret = get_df("ticaret")
+        df_hedefler, ws_hedefler = get_df("hedefler")
+        df_kartlar, ws_kartlar = get_df("kredi_kartlari")
+        df_taksitler, ws_taksitler = get_df("taksitler")
+        df_yastik, ws_yastik = get_df("yastik_alti")
+        df_borclar, ws_borclar = get_df("manuel_borclar")
+        df_krediler, ws_krediler = get_df("krediler")
+        df_abonelikler, ws_abonelikler = get_df("abonelikler")
+        df_butceler, ws_butceler = get_df("butceler")
+        df_faturalar, ws_faturalar = get_df("faturalar")
+        df_notlar, ws_notlar = get_df("notlar")
+        
+        df_islemler = clean_numeric(df_islemler, ['miktar'])
+        df_ticaret = clean_numeric(df_ticaret, ['alis_fiyati', 'tahmini_satis'])
+        df_hedefler = clean_numeric(df_hedefler, ['hedef_tutar', 'biriken'])
+        df_kartlar = clean_numeric(df_kartlar, ['kart_limit', 'guncel_borc'])
+        df_taksitler = clean_numeric(df_taksitler, ['aylik_tutar'])
+        df_yastik = clean_numeric(df_yastik, ['miktar'])
+        df_borclar = clean_numeric(df_borclar, ['toplam_miktar', 'odenen'])
+        df_krediler = clean_numeric(df_krediler, ['toplam_borc', 'odenen', 'aylik_taksit'])
+        df_abonelikler = clean_numeric(df_abonelikler, ['tutar'])
+        df_butceler = clean_numeric(df_butceler, ['limit_tutar'])
+        if not df_notlar.empty: 
+            df_notlar = df_notlar.fillna("")
+        
+    except Exception as e:
+        st.error(f"⚠️ Veriler yüklenirken bağlantı yavaşladı. Lütfen 5 saniye bekleyip sayfayı yenileyin. (Detay: {e})")
+        st.stop()
 
-# YENİ: Toplu yükleme ile Google Kotasını (429) koruma
 if df_yastik.empty:
     baslangic_kasa = [
         ['Genel Kasa - USD', 0],
@@ -492,8 +490,8 @@ with sekmeler[0]:
                 for idx, row in df_faturalar.iterrows():
                     f_id = str(row['id'])
                     eski_durum = str(row['durum']).lower() == 'true'
-                    
                     isim_gosterim = f"~~{row['isim']}~~" if eski_durum else f"{row['isim']}"
+                    
                     yeni_durumlar[f_id] = st.checkbox(isim_gosterim, value=eski_durum, key=f"fat_chk_{idx}_{f_id}")
                 
                 c1, c2 = st.columns(2)
@@ -633,7 +631,7 @@ with sekmeler[2]:
                 time.sleep(1)
                 clear_cache_and_rerun()
 
-# --- SEKME 4: GİDERLER (FORM KİLİDİ YOK - ANINDA TEPKİ) ---
+# --- SEKME 4: GİDERLER ---
 with sekmeler[3]:
     st.subheader("🛍️ Akıllı Harcama ve Kart Asistanı")
     
@@ -1223,13 +1221,13 @@ with sekmeler[13]:
         tahmin_datalari = []
         
         # YENİ: SABİT GİDER FİLTRESİ - BU KELİMELERİ İÇERENLER 30 İLE ÇARPILMAZ!
-        sabit_kelimeler = ["kira", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap", "abonelik"]
+        sabit_kelimeler = ["kira", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap"]
         
         for kat, miktar in grouped_giderler.items():
             if kat == "Maaş/Gelir" or kat == "Diğer": 
                 continue
                 
-            # YENİ: Python'un "İnternet" kelimesindeki "İ" harfini küçültememe hatası giderildi!
+            # YENİ: Türkçe karakter sorunu (İnternet) engellendi!
             kat_lower = kat.lower().replace("i̇", "i").replace("ı", "i")
             is_sabit = any(kelime in kat_lower for kelime in sabit_kelimeler)
             
