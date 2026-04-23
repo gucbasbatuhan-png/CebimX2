@@ -682,8 +682,8 @@ with sekmeler[3]:
                     if odeme_tipi == "Kredi Kartı" and secilen_kart_id:
                         tip_kayit = "KK Gider"
                         if t_ay > 1:
-                           aylik_saf_sayi = float(round(h_miktar / t_ay, 2))
-                           ws_taksitler.append_row([get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik_saf_sayi, t_ay])
+                           aylik_metin = str(round(h_miktar / t_ay, 2)).replace('.', ',')
+                           ws_taksitler.append_row([get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik_metin, t_ay])
                             
                         
                         row_idx = get_row_idx(df_kartlar, 'id', secilen_kart_id)
