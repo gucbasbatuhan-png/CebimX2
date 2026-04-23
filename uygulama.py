@@ -682,15 +682,8 @@ with sekmeler[3]:
                     if odeme_tipi == "Kredi Kartı" and secilen_kart_id:
                         tip_kayit = "KK Gider"
                         if t_ay > 1:
-                            # Sayıyı hesapla, noktayı virgüle çevir, metin olarak USER_ENTERED ile yolla
-                            aylik_hesap = round(h_miktar / t_ay, 2)
-                            aylik_virgullu = str(aylik_hesap).replace('.', ',')
-                            ws_taksitler.append_row(
-                                [get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik_virgullu, t_ay], 
-                                value_input_option='USER_ENTERED'
-                            )
-                        
-                        row_idx = get_row_idx(df_kartlar, 'id', secilen_kart_id)
+                            aylik_saf = float(round(h_miktar / t_ay, 2))
+                            ws_taksitler.append_row([get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik_saf, t_ay], value_input_option='RAW')
                         if row_idx:
                             mevcut_borc = safe_float(df_kartlar.loc[df_kartlar['id'].astype(str) == str(secilen_kart_id), 'guncel_borc'].iloc[0])
                             yeni_borc = mevcut_borc + h_miktar
