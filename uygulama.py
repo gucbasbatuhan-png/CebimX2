@@ -682,8 +682,15 @@ with sekmeler[3]:
                     if odeme_tipi == "Kredi Kartı" and secilen_kart_id:
                         tip_kayit = "KK Gider"
                         if t_ay > 1:
-                           aylik_metin = str(round(h_miktar / t_ay, 2)).replace('.', ',')
-                           ws_taksitler.append_row([get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik_metin, t_ay])
+    # Python'da hesaplama YAPMIYORUZ, formülü metin olarak hazırlıyoruz
+                           aylik_formulu = f"={h_miktar}/{t_ay}" 
+    
+    # KART_ID ve diğer verileri yine gönderiyoruz, sadece tutar yerine formül gidiyor
+    # ÖNEMLİ: 'USER_ENTERED' seçeneği Sheets'e "bu bir formüldür, işle" der.
+                           ws_taksitler.append_row(
+                               [get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik_formulu, t_ay],
+                               value_input_option='USER_ENTERED'
+                           )
                             
                         
                         row_idx = get_row_idx(df_kartlar, 'id', secilen_kart_id)
