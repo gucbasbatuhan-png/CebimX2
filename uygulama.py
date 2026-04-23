@@ -300,7 +300,7 @@ with st.spinner("📡 Veriler Google Sheets'ten çekiliyor... (Lütfen bekleyin)
 # DİKKAT: Yastık Altı ve Bütçeler tablolarını başlangıçta otomatik dolduran (ve Google Kotasını patlatan) ölüm döngüsü tamamen SİLİNDİ!
 
 kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", 
-              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi"]
+              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi", "Araç Masrafı", "Araç Kiralama", "Kargo Gideri", "Vergi&Harç", "Yakıt" ]
 
 # --- 6. CANLI PİYASALAR VE KRİPTO RADARI ---
 st.subheader("🌍 Canlı Piyasalar ve Kripto Radarı")
