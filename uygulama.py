@@ -29,17 +29,16 @@ class DirtyTrackerWS:
         
     def _retry_operation(self, operation, *args, **kwargs):
         self._mark_dirty()
-        for i in range(4): # Google'ı sakinleştirmek için 4 kez dener
+        for i in range(5): # Google'ı sakinleştirmek için artan sürelerle dener
             try:
                 return operation(*args, **kwargs)
             except Exception as e:
                 if "429" in str(e) or "Quota" in str(e) or "APIError" in str(e):
-                    time.sleep(2 + i)
+                    time.sleep(3 * (i + 1)) # 3, 6, 9, 12 saniye bekler
                 else:
                     raise e
         return operation(*args, **kwargs)
 
-    # YENİ: Google Sheets'in milyarlarca lira hesaplama hatasını çözen "Saf (RAW) Veri" kalkanı
     def append_row(self, values, **kwargs):
         kwargs.setdefault('value_input_option', 'RAW')
         v_clean = [float(round(v, 2)) if isinstance(v, float) else v for v in values]
@@ -76,12 +75,12 @@ def fetch_sheet_data(sheet_name, refresh_token):
     sh, worksheets = get_all_worksheets()
     ws = worksheets.get(sheet_name)
     if ws:
-        for i in range(4): 
+        for i in range(5): 
             try:
                 return ws.get_all_records()
             except Exception as e:
-                if "429" in str(e) or "Quota" in str(e):
-                    time.sleep(2 + i)
+                if "429" in str(e) or "Quota" in str(e) or "APIError" in str(e):
+                    time.sleep(3 * (i + 1))
                 else:
                     return []
         try:
@@ -352,7 +351,7 @@ kol_kur4.success(f"₿ BTC: **{st.session_state.btc_try:,.0f} TL**")
 kol_kur5.success(f"⟠ ETH: **{st.session_state.eth_try:,.0f} TL**")
 st.divider()
 
-# --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK (ESNEK DÖNGÜ) ---
+# --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK ---
 alev_serisi, buz_serisi = calculate_streaks(df_islemler)
 
 if not df_islemler.empty:
@@ -431,7 +430,6 @@ sekmeler = st.tabs([
 
 # --- SEKME 1: ANA KUMANDA ---
 with sekmeler[0]:
-    # SERİ GÖSTERGELERİ (OYUNLAŞTIRMA)
     col_seri1, col_seri2, col_seri3 = st.columns([1, 1, 2])
     with col_seri1:
         st.metric("🔥 Alev Serisi", f"{alev_serisi} Gün", help="Hiç harcama yapmadığın gün sayısı (Sıfır Harcama)")
@@ -475,29 +473,48 @@ with sekmeler[0]:
     kol_ana1, kol_ana2 = st.columns([1, 1])
     
     with kol_ana1:
+        # YENİ: CHECKLIST KOTASINI KORUYAN FORM YAPISI
         st.subheader("🧾 Aylık Sabit Görev / Fatura Checklist'i")
-        if not df_faturalar.empty:
-            for idx, row in df_faturalar.iterrows():
-                f_id = str(row['id'])
-                eski_durum = str(row['durum']).lower() == 'true'
-                
-                isim_gosterim = f"~~{row['isim']}~~" if eski_durum else f"{row['isim']}"
-                yeni_durum = st.checkbox(isim_gosterim, value=eski_durum, key=f"fat_chk_{idx}_{f_id}")
-                
-                if yeni_durum != eski_durum:
-                    row_idx = get_row_idx(df_faturalar, 'id', f_id)
-                    if row_idx:
-                        ws_faturalar.update_cell(row_idx, 3, str(yeni_durum))
-                        clear_cache_and_rerun()
-                    else:
-                        st.error("Satır bulunamadı!")
+        with st.form("checklist_form"):
+            if not df_faturalar.empty:
+                yeni_durumlar = {}
+                for idx, row in df_faturalar.iterrows():
+                    f_id = str(row['id'])
+                    eski_durum = str(row['durum']).lower() == 'true'
+                    isim_gosterim = f"~~{row['isim']}~~" if eski_durum else f"{row['isim']}"
                     
-            if st.button("🔄 Yeni Ay: Tüm Tikleri Temizle", use_container_width=True):
-                for idx in range(len(df_faturalar)):
-                    ws_faturalar.update_cell(idx + 2, 3, "False")
-                clear_cache_and_rerun()
-        else:
-            st.info("📌 Checklist boş. 'Gider' sekmesinden ödenecek fatura veya görev ekleyebilirsin.")
+                    # Kullanıcının seçtiği yeni durumu sözlükte saklıyoruz
+                    yeni_durumlar[f_id] = st.checkbox(isim_gosterim, value=eski_durum, key=f"fat_chk_{idx}_{f_id}")
+                
+                c1, c2 = st.columns(2)
+                # Formu Kaydet butonu (Tüm işaretlemeleri tek seferde Google'a gönderir)
+                if c1.form_submit_button("✅ Durumları Kaydet"):
+                    degisiklik_var = False
+                    for idx, row in df_faturalar.iterrows():
+                        f_id = str(row['id'])
+                        eski_durum = str(row['durum']).lower() == 'true'
+                        y_durum = yeni_durumlar[f_id]
+                        
+                        if y_durum != eski_durum:
+                            row_idx = get_row_idx(df_faturalar, 'id', f_id)
+                            if row_idx:
+                                ws_faturalar.update_cell(row_idx, 3, str(y_durum))
+                                degisiklik_var = True
+                                
+                    if degisiklik_var:
+                        st.success("Tüm checklist güncellendi!")
+                        time.sleep(1)
+                        clear_cache_and_rerun()
+
+                if c2.form_submit_button("🔄 Yeni Ay: Tüm Tikleri Temizle"):
+                    for idx in range(len(df_faturalar)):
+                        ws_faturalar.update_cell(idx + 2, 3, "False")
+                    st.success("Tüm tikler sıfırlandı!")
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+            else:
+                st.info("📌 Checklist boş. 'Gider' sekmesinden ödenecek fatura veya görev ekleyebilirsin.")
+                st.form_submit_button("Boş")
 
     with kol_ana2:
         st.subheader("⏳ Günlük Yaşam Limiti")
@@ -607,7 +624,7 @@ with sekmeler[2]:
                 time.sleep(1)
                 clear_cache_and_rerun()
 
-# --- SEKME 4: GİDERLER (FORM KİLİDİ YOK - ANINDA TEPKİ) ---
+# --- SEKME 4: GİDERLER (AKILLI HARCAMA & CHECKLIST YÖNETİMİ) ---
 with sekmeler[3]:
     st.subheader("🛍️ Akıllı Harcama ve Kart Asistanı")
     
