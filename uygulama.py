@@ -682,9 +682,13 @@ with sekmeler[3]:
                     if odeme_tipi == "Kredi Kartı" and secilen_kart_id:
                         tip_kayit = "KK Gider"
                         if t_ay > 1:
-                            # Başına ' (kesme işareti) koyarak Google Sheets'in küsüratları bozmasını YASAKLIYORUZ!
-                            aylik_zirhli = f"'{h_miktar / t_ay:.2f}".replace('.', ',')
-                            ws_taksitler.append_row([get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik_zirhli, t_ay], value_input_option='USER_ENTERED')
+                            # Sayıyı hesapla, noktayı virgüle çevir, metin olarak USER_ENTERED ile yolla
+                            aylik_hesap = round(h_miktar / t_ay, 2)
+                            aylik_virgullu = str(aylik_hesap).replace('.', ',')
+                            ws_taksitler.append_row(
+                                [get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik_virgullu, t_ay], 
+                                value_input_option='USER_ENTERED'
+                            )
                         
                         row_idx = get_row_idx(df_kartlar, 'id', secilen_kart_id)
                         if row_idx:
