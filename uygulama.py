@@ -29,16 +29,17 @@ class DirtyTrackerWS:
         
     def _retry_operation(self, operation, *args, **kwargs):
         self._mark_dirty()
-        for i in range(5): # Google'ı sakinleştirmek için artan sürelerle dener
+        for i in range(4): # Google'ı sakinleştirmek için 4 kez dener
             try:
                 return operation(*args, **kwargs)
             except Exception as e:
                 if "429" in str(e) or "Quota" in str(e) or "APIError" in str(e):
-                    time.sleep(3 * (i + 1)) # 3, 6, 9, 12 saniye bekler
+                    time.sleep(2 + i)
                 else:
                     raise e
         return operation(*args, **kwargs)
 
+    # YENİ: Google Sheets'in milyarlarca lira hesaplama hatasını çözen "Saf (RAW) Veri" kalkanı
     def append_row(self, values, **kwargs):
         kwargs.setdefault('value_input_option', 'RAW')
         v_clean = [float(round(v, 2)) if isinstance(v, float) else v for v in values]
@@ -75,12 +76,12 @@ def fetch_sheet_data(sheet_name, refresh_token):
     sh, worksheets = get_all_worksheets()
     ws = worksheets.get(sheet_name)
     if ws:
-        for i in range(5): 
+        for i in range(4): 
             try:
                 return ws.get_all_records()
             except Exception as e:
-                if "429" in str(e) or "Quota" in str(e) or "APIError" in str(e):
-                    time.sleep(3 * (i + 1))
+                if "429" in str(e) or "Quota" in str(e):
+                    time.sleep(2 + i)
                 else:
                     return []
         try:
@@ -214,7 +215,7 @@ def calculate_streaks(df):
             
     return alev, buz
 
-# --- 3. GİRİŞ (LOGIN) SİSTEMİ ---
+# --- 3. GİRİŞ (LOGIN) SİSTEMİ (FORM İPTAL EDİLDİ - KİLİTLENMEZ) ---
 if 'giris_yapildi' not in st.session_state:
     st.session_state.giris_yapildi = False
     st.session_state.kullanici_tipi = None
@@ -223,15 +224,17 @@ if not st.session_state.giris_yapildi:
     st.title("🔐 CebimX Giriş Ekranı")
     kol1, kol2, kol3 = st.columns([1, 2, 1])
     with kol2:
-        with st.form("giris_formu", clear_on_submit=False):
+        st.write("<br>", unsafe_allow_html=True) # Boşluk için
+        with st.container(border=True):
             st.subheader("Hoş Geldiniz")
             kadi = st.text_input("Kullanıcı Adı")
             sifre = st.text_input("Şifre", type="password")
-            giris_btn = st.form_submit_button("Giriş Yap", use_container_width=True)
+            giris_btn = st.button("Giriş Yap", use_container_width=True, type="primary")
+            
             if giris_btn:
                 if kadi == "admin" and sifre == st.secrets["kullanici"]["sifre"]:
                     st.success("✅ Başarıyla giriş yaptınız!")
-                    time.sleep(1) 
+                    time.sleep(0.5) 
                     st.session_state.giris_yapildi = True
                     st.session_state.kullanici_tipi = "gercek"
                     st.rerun()
@@ -351,7 +354,7 @@ kol_kur4.success(f"₿ BTC: **{st.session_state.btc_try:,.0f} TL**")
 kol_kur5.success(f"⟠ ETH: **{st.session_state.eth_try:,.0f} TL**")
 st.divider()
 
-# --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK ---
+# --- 7. ORTAK VERİLER VE GERÇEK NET VARLIK (ESNEK DÖNGÜ) ---
 alev_serisi, buz_serisi = calculate_streaks(df_islemler)
 
 if not df_islemler.empty:
@@ -473,7 +476,6 @@ with sekmeler[0]:
     kol_ana1, kol_ana2 = st.columns([1, 1])
     
     with kol_ana1:
-        # YENİ: CHECKLIST KOTASINI KORUYAN FORM YAPISI
         st.subheader("🧾 Aylık Sabit Görev / Fatura Checklist'i")
         with st.form("checklist_form"):
             if not df_faturalar.empty:
@@ -482,31 +484,26 @@ with sekmeler[0]:
                     f_id = str(row['id'])
                     eski_durum = str(row['durum']).lower() == 'true'
                     isim_gosterim = f"~~{row['isim']}~~" if eski_durum else f"{row['isim']}"
-                    
-                    # Kullanıcının seçtiği yeni durumu sözlükte saklıyoruz
                     yeni_durumlar[f_id] = st.checkbox(isim_gosterim, value=eski_durum, key=f"fat_chk_{idx}_{f_id}")
                 
                 c1, c2 = st.columns(2)
-                # Formu Kaydet butonu (Tüm işaretlemeleri tek seferde Google'a gönderir)
                 if c1.form_submit_button("✅ Durumları Kaydet"):
                     degisiklik_var = False
                     for idx, row in df_faturalar.iterrows():
                         f_id = str(row['id'])
                         eski_durum = str(row['durum']).lower() == 'true'
                         y_durum = yeni_durumlar[f_id]
-                        
                         if y_durum != eski_durum:
                             row_idx = get_row_idx(df_faturalar, 'id', f_id)
                             if row_idx:
                                 ws_faturalar.update_cell(row_idx, 3, str(y_durum))
                                 degisiklik_var = True
-                                
                     if degisiklik_var:
-                        st.success("Tüm checklist güncellendi!")
+                        st.success("Checklist güncellendi!")
                         time.sleep(1)
                         clear_cache_and_rerun()
 
-                if c2.form_submit_button("🔄 Yeni Ay: Tüm Tikleri Temizle"):
+                if c2.form_submit_button("🔄 Tüm Tikleri Temizle"):
                     for idx in range(len(df_faturalar)):
                         ws_faturalar.update_cell(idx + 2, 3, "False")
                     st.success("Tüm tikler sıfırlandı!")
@@ -624,7 +621,7 @@ with sekmeler[2]:
                 time.sleep(1)
                 clear_cache_and_rerun()
 
-# --- SEKME 4: GİDERLER (AKILLI HARCAMA & CHECKLIST YÖNETİMİ) ---
+# --- SEKME 4: GİDERLER ---
 with sekmeler[3]:
     st.subheader("🛍️ Akıllı Harcama ve Kart Asistanı")
     
@@ -844,8 +841,7 @@ with sekmeler[5]:
             if st.button("Sıfırlanan (Miktarı 0 Olan) Varlıkları Listeden Sil"):
                 for idx, row in df_sifirlar.iterrows():
                     row_idx = get_row_idx(df_yastik, 'varlik_tipi', row['varlik_tipi'])
-                    if row_idx:
-                        ws_yastik.delete_rows(row_idx)
+                    if row_idx: ws_yastik.delete_rows(row_idx)
                 clear_cache_and_rerun()
         else:
             st.info("Listede sıfırlanmış boş varlık kaydı yok, her şey temiz.")
@@ -903,15 +899,13 @@ with sekmeler[6]:
                 kol_k4.write(f"Kesim: {row['hesap_kesim']}")
                 if kol_k5.button("🗑️", key=f"sil_kart_{k_id}_{idx}"):
                     kart_row_idx = get_row_idx(df_kartlar, 'id', k_id)
-                    if kart_row_idx:
-                        ws_kartlar.delete_rows(kart_row_idx)
+                    if kart_row_idx: ws_kartlar.delete_rows(kart_row_idx)
                     
                     if not df_taksitler.empty:
                         taksitler_sil = df_taksitler[df_taksitler['kart_id'].astype(str) == str(k_id)]
                         for _, t_row in taksitler_sil.iterrows():
                             t_idx = get_row_idx(df_taksitler, 'id', t_row['id'])
-                            if t_idx:
-                                ws_taksitler.delete_rows(t_idx)
+                            if t_idx: ws_taksitler.delete_rows(t_idx)
                     clear_cache_and_rerun()
                 st.markdown("---")
 
