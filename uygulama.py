@@ -683,6 +683,7 @@ with sekmeler[3]:
                         tip_kayit = "KK Gider"
                         if t_ay > 1:
                             aylik = h_miktar / t_ay
+                            aylik = f"{h_miktar / t_ay:.2f}".replace('.', ',')
                             ws_taksitler.append_row([get_new_id(df_taksitler), secilen_kart_id, f"{h_kategori} ({ihtiyac_durumu})", aylik, t_ay])
                         
                         row_idx = get_row_idx(df_kartlar, 'id', secilen_kart_id)
