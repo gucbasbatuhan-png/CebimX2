@@ -29,7 +29,7 @@ class DirtyTrackerWS:
         
     def _retry_operation(self, operation, *args, **kwargs):
         self._mark_dirty()
-        for i in range(4): 
+        for i in range(4): # Google'ı sakinleştirmek için 4 kez dener
             try:
                 return operation(*args, **kwargs)
             except Exception as e:
@@ -128,11 +128,14 @@ def get_df(sheet_name):
     data = fetch_sheet_data(sheet_name, token)
     df = pd.DataFrame(data)
     
-    if not df.empty and 'id' not in df.columns and sheet_name in cols:
-        ws.insert_row(cols[sheet_name], index=1)
-        st.session_state.dirty_sheets.add(sheet_name)
-        data = ws.get_all_records()
-        df = pd.DataFrame(data)
+    # YENİ: Varlıklar tablosunu çözen, kaymaları engelleyen akıllı kalkan
+    if not df.empty and sheet_name in cols:
+        expected_first_col = cols[sheet_name][0]
+        if expected_first_col not in df.columns:
+            ws.insert_row(cols[sheet_name], index=1)
+            st.session_state.dirty_sheets.add(sheet_name)
+            data = ws.get_all_records()
+            df = pd.DataFrame(data)
         
     if df.empty:
         df = pd.DataFrame(columns=cols.get(sheet_name, []))
@@ -297,10 +300,21 @@ with st.spinner("📡 Veriler Google Sheets'ten çekiliyor... (Lütfen bekleyin)
         st.error(f"⚠️ Google Sheets bağlantısı kurulurken bir sorun oluştu. Sayfayı yenileyip tekrar deneyin. (Hata: {e})")
         st.stop()
 
-# DİKKAT: Yastık Altı ve Bütçeler tablolarını başlangıçta otomatik dolduran (ve Google Kotasını patlatan) ölüm döngüsü tamamen SİLİNDİ!
+if df_yastik.empty:
+    ws_yastik.append_row(['Genel Kasa - USD', 0])
+    ws_yastik.append_row(['Genel Kasa - EUR', 0])
+    ws_yastik.append_row(['Genel Kasa - GA', 0])
+    ws_yastik.append_row(['Genel Kasa - BTC', 0])
+    ws_yastik.append_row(['Genel Kasa - ETH', 0])
+    clear_cache_and_rerun()
 
 kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", 
-              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi", "Araç Masrafı", "Araç Kiralama", "Kargo Gideri", "Vergi&Harç", "Yakıt" ]
+              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi"]
+
+if df_butceler.empty:
+    for i, kat in enumerate(kategoriler):
+        ws_butceler.append_row([i+1, kat, 0])
+    clear_cache_and_rerun()
 
 # --- 6. CANLI PİYASALAR VE KRİPTO RADARI ---
 st.subheader("🌍 Canlı Piyasalar ve Kripto Radarı")
@@ -1200,13 +1214,13 @@ with sekmeler[13]:
         tahmin_datalari = []
         
         # YENİ: SABİT GİDER FİLTRESİ - BU KELİMELERİ İÇERENLER 30 İLE ÇARPILMAZ!
-        sabit_kelimeler = ["kira", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap"]
+        sabit_kelimeler = ["kira", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap", "abonelik"]
         
         for kat, miktar in grouped_giderler.items():
             if kat == "Maaş/Gelir" or kat == "Diğer": 
                 continue
                 
-            # YENİ: Türkçe karakter sorunu (İnternet vs.) kökünden çözüldü!
+            # YENİ: Türkçe karakter sorunu (İnternet) engellendi!
             kat_lower = kat.lower().replace("i̇", "i").replace("ı", "i")
             is_sabit = any(kelime in kat_lower for kelime in sabit_kelimeler)
             
