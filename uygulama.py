@@ -29,7 +29,7 @@ class DirtyTrackerWS:
         
     def _retry_operation(self, operation, *args, **kwargs):
         self._mark_dirty()
-        for i in range(4): # Google'ı sakinleştirmek için 4 kez dener
+        for i in range(4): 
             try:
                 return operation(*args, **kwargs)
             except Exception as e:
@@ -128,14 +128,11 @@ def get_df(sheet_name):
     data = fetch_sheet_data(sheet_name, token)
     df = pd.DataFrame(data)
     
-    # YENİ: Varlıklar tablosunu çözen, kaymaları engelleyen akıllı kalkan
-    if not df.empty and sheet_name in cols:
-        expected_first_col = cols[sheet_name][0]
-        if expected_first_col not in df.columns:
-            ws.insert_row(cols[sheet_name], index=1)
-            st.session_state.dirty_sheets.add(sheet_name)
-            data = ws.get_all_records()
-            df = pd.DataFrame(data)
+    if not df.empty and 'id' not in df.columns and sheet_name in cols:
+        ws.insert_row(cols[sheet_name], index=1)
+        st.session_state.dirty_sheets.add(sheet_name)
+        data = ws.get_all_records()
+        df = pd.DataFrame(data)
         
     if df.empty:
         df = pd.DataFrame(columns=cols.get(sheet_name, []))
@@ -397,7 +394,8 @@ toplam_diger_borclar = toplam_manuel_borc + toplam_kredi_borcu
 
 toplam_yastik_tl = 0.0
 varlik_kategorileri = {} 
-varlik_tipleri = {'USD': 0, 'EUR': 0, 'GA': 0, 'Çeyrek Altın': 0, 'Yarım Altın': 0, 'Tam Altın': 0, 'Ata Altın': 0, 'BTC': 0, 'ETH': 0} 
+# YENİ: 22 Ayar Bilezik (Gr) listeye eklendi
+varlik_tipleri = {'USD': 0, 'EUR': 0, 'GA': 0, 'Çeyrek Altın': 0, 'Yarım Altın': 0, 'Tam Altın': 0, 'Ata Altın': 0, '22 Ayar Bilezik (Gr)': 0, 'BTC': 0, 'ETH': 0} 
 
 if not df_yastik.empty:
     for _, row in df_yastik.iterrows():
@@ -416,6 +414,8 @@ if not df_yastik.empty:
         elif birim == 'Yarım Altın': tl_karsiligi = miktar * (st.session_state.gr_altin * 3.21)
         elif birim == 'Tam Altın': tl_karsiligi = miktar * (st.session_state.gr_altin * 6.42)
         elif birim == 'Ata Altın': tl_karsiligi = miktar * (st.session_state.gr_altin * 6.61)
+        # YENİ: 22 Ayar Bileziğin (saf olmayan 0.916 katsayılı) canlı TL hesaplaması
+        elif birim == '22 Ayar Bilezik (Gr)': tl_karsiligi = miktar * (st.session_state.gr_altin * 0.916)
         elif birim == 'BTC': tl_karsiligi = miktar * st.session_state.btc_try
         elif birim == 'ETH': tl_karsiligi = miktar * st.session_state.eth_try
         
@@ -624,7 +624,7 @@ with sekmeler[2]:
                 time.sleep(1)
                 clear_cache_and_rerun()
 
-# --- SEKME 4: GİDERLER (FORM KİLİDİ YOK - ANINDA TEPKİ) ---
+# --- SEKME 4: GİDERLER ---
 with sekmeler[3]:
     st.subheader("🛍️ Akıllı Harcama ve Kart Asistanı")
     
@@ -809,10 +809,13 @@ with sekmeler[5]:
     with y_kol1:
         st.write("### ➕ Varlık Ekle / Çıkar")
         with st.form("varlik_ekle_cikar_formu", clear_on_submit=True):
-            sahip = st.selectbox("Kimin İçin / Hangi Kasa?", ["Kendim", "Eşim", "Çocuğum", "Ortak Kasa", "Genel Kasa", "Anne"])
-            islem_varlik = st.selectbox("Hangi Varlık?", ["USD", "EUR", "GA", "Çeyrek Altın", "Yarım Altın", "Tam Altın", "Ata Altın", "BTC", "ETH"])
+            # YENİ: Anne kasası seçeneği buraya eklendi!
+            sahip = st.selectbox("Kimin İçin / Hangi Kasa?", ["Kendim", "Eşim", "Çocuğum", "Anne", "Ortak Kasa", "Genel Kasa"])
+            
+            # YENİ: 22 Ayar Bilezik (Gr) buraya eklendi!
+            islem_varlik = st.selectbox("Hangi Varlık?", ["USD", "EUR", "GA", "Çeyrek Altın", "Yarım Altın", "Tam Altın", "Ata Altın", "22 Ayar Bilezik (Gr)", "BTC", "ETH"])
             islem_tipi = st.radio("İşlem Tipi", ["Ekle (+)", "Çıkar (-)"], horizontal=True)
-            islem_miktari = st.number_input("Miktar (Örn: 2 Adet Çeyrek, 100 Dolar)", min_value=0.0, step=1.0, format="%.6f")
+            islem_miktari = st.number_input("Miktar (Örn: 20 Gram, 2 Adet Çeyrek, 100 Dolar)", min_value=0.0, step=1.0, format="%.6f")
             
             if st.form_submit_button("İşlemi Kaydet"):
                 if islem_miktari > 0:
@@ -855,6 +858,11 @@ with sekmeler[5]:
         st.info(f"💵 Tüm Kasa USD: **{varlik_tipleri.get('USD', 0):,.2f}**")
         st.info(f"💶 Tüm Kasa EUR: **{varlik_tipleri.get('EUR', 0):,.2f}**")
         st.warning(f"🥇 Tüm Kasa Gram Altın: **{varlik_tipleri.get('GA', 0):,.2f} Gram**")
+        
+        # YENİ: 22 Ayar bileziği ekranda gösterme komutu
+        if varlik_tipleri.get('22 Ayar Bilezik (Gr)', 0) > 0:
+            st.warning(f"🪙 Tüm Kasa 22 Ayar Bilezik: **{varlik_tipleri.get('22 Ayar Bilezik (Gr)', 0):,.2f} Gram**")
+            
         if varlik_tipleri.get('Çeyrek Altın', 0) > 0:
             st.warning(f"🪙 Tüm Kasa Çeyrek Altın: **{varlik_tipleri.get('Çeyrek Altın', 0):,.0f} Adet**")
         if varlik_tipleri.get('Yarım Altın', 0) > 0:
@@ -1213,27 +1221,22 @@ with sekmeler[13]:
         st.write(f"Maaşından bu yana **{gecen_gun}.** gün. Mevcut harcama hızına göre döngü sonu tahminleri:")
         tahmin_datalari = []
         
-        # YENİ: SABİT GİDER FİLTRESİ - BU KELİMELERİ İÇERENLER 30 İLE ÇARPILMAZ!
-        sabit_kelimeler = ["kira", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap", "abonelik"]
+        sabit_kelimeler = ["kira", "fatura", "aidat", "elektrik", "su", "doğalgaz", "internet", "telefon", "kredi", "taksit", "ödeme", "kk", "büşra", "batu", "harçlık", "berber", "eczane", "sağlık", "depo", "ek hesap"]
         
         for kat, miktar in grouped_giderler.items():
             if kat == "Maaş/Gelir" or kat == "Diğer": 
                 continue
                 
-            # YENİ: Türkçe karakter sorunu (İnternet) engellendi!
             kat_lower = kat.lower().replace("i̇", "i").replace("ı", "i")
             is_sabit = any(kelime in kat_lower for kelime in sabit_kelimeler)
             
             if is_sabit:
-                # Sabit giderse, 30 ile çarpma, direkt mevcut tutarı yaz
                 ay_sonu_tahmin = miktar 
             else:
-                # Değişken giderse (market, eğlence vs.), gün sayısına bölüp 30 ile çarp
                 ay_sonu_tahmin = (miktar / gecen_gun) * 30
                 
             tahmin_datalari.append({"Kategori": kat, "Şu Anki Harcama": miktar, "Ay Sonu Tahmini": ay_sonu_tahmin})
             
-            # Sadece artan harcamalar için uyarı ver
             if not is_sabit and ay_sonu_tahmin > miktar * 1.5: 
                 st.warning(f"🚨 **{kat}** kategorisinde frene bas! Şu an {miktar:,.0f} TL harcadın, bu gidişle **{ay_sonu_tahmin:,.0f} TL**'yi bulacak!")
         
@@ -1244,13 +1247,15 @@ with sekmeler[13]:
     st.divider()
     st.subheader("💡 Yapay Zeka Finansal Analizlerin (PRO Sürüm)")
     
+    # YENİ: Toplam likit hesaplamasına 22 Ayar Bilezik eklendi!
     d_usd_tl = varlik_tipleri.get('USD', 0) * st.session_state.usd_try
     d_eur_tl = varlik_tipleri.get('EUR', 0) * st.session_state.eur_try
     d_ga_tl = (varlik_tipleri.get('GA', 0) * st.session_state.gr_altin) + \
                    (varlik_tipleri.get('Çeyrek Altın', 0) * (st.session_state.gr_altin * 1.605)) + \
                    (varlik_tipleri.get('Yarım Altın', 0) * (st.session_state.gr_altin * 3.21)) + \
                    (varlik_tipleri.get('Tam Altın', 0) * (st.session_state.gr_altin * 6.42)) + \
-                   (varlik_tipleri.get('Ata Altın', 0) * (st.session_state.gr_altin * 6.61))
+                   (varlik_tipleri.get('Ata Altın', 0) * (st.session_state.gr_altin * 6.61)) + \
+                   (varlik_tipleri.get('22 Ayar Bilezik (Gr)', 0) * (st.session_state.gr_altin * 0.916))
     d_btc_tl = varlik_tipleri.get('BTC', 0) * st.session_state.btc_try
     d_eth_tl = varlik_tipleri.get('ETH', 0) * st.session_state.eth_try
     toplam_likit = net_nakit + d_usd_tl + d_eur_tl + d_ga_tl
