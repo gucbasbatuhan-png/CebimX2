@@ -308,7 +308,8 @@ if df_yastik.empty:
     ws_yastik.append_rows(baslangic_kasa)
     clear_cache_and_rerun()
 
-kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi"]
+kategoriler = ["Market", "Kira", "Fatura", "Eğlence", "Oyun & Yazılım", "Donanım (Al-Sat)", "Diğer", "Proje & Geliştirici", "Eğitim", "Kişisel Gelişim", "Dışarıdan Yeme", "Dışarıdan İçme", "Ulaşım", "Seyahat", "Giyim", 
+              "Kişisel Bakım", "Sağlık", "Eczane", "Berber", "Büşra Kuaför", "Elektrik", "Su", "Doğalgaz", "İnternet", "Aidat", "Depo Kira", "Büşra Telefon", "Batu Telefon", "Ek Hesap Ödemesi", "Vergi&Harç", "Araç Masrafı", "Araç Kiralama", "Kargo Gideri", "Yakıt", "Otopark"]
 
 if df_butceler.empty:
     butce_liste = [[i+1, kat, 0] for i, kat in enumerate(kategoriler)]
