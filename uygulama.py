@@ -262,6 +262,10 @@ with st.sidebar:
     dongu_dt = pd.to_datetime(dongu_baslangici)
     st.divider()
 
+    if st.button("🔄 Verileri Yenile (Hafızayı Sil)", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
     if st.button("🚪 Çıkış Yap", use_container_width=True):
         st.session_state.giris_yapildi = False
         st.session_state.kullanici_tipi = None
